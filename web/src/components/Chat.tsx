@@ -24,11 +24,20 @@ function Message({ role, kind, content, streaming }: { role: 'user' | 'assistant
   );
 }
 
-function isEditable(el: Element | null): boolean {
-  if (!el) return false;
+const HOLD_TO_TALK_MS = 250;
+
+/** Space stays an ordinary key in the code editor and form fields. The message box and buttons get hold to talk. */
+function keepsSpace(el: Element | null, composer: HTMLTextAreaElement | null): boolean {
+  if (!el || el === composer) return false;
   if (el.closest('.monaco-editor')) return true;
   const tag = el.tagName;
   return tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT' || (el as HTMLElement).isContentEditable;
+}
+
+/** Does what a tapped Space would have done, since the keydown was held back to see whether it was a hold. */
+function tapSpace(el: Element | null, composer: HTMLTextAreaElement | null) {
+  if (el === composer) document.execCommand('insertText', false, ' ');
+  else if (el instanceof HTMLButtonElement) el.click();
 }
 
 export function Chat({
@@ -56,6 +65,7 @@ export function Chat({
   const textarea = useRef<HTMLTextAreaElement>(null);
   const stickToBottom = useRef(true);
   const base = useRef('');
+  const spaceHeld = useRef<{ timer: ReturnType<typeof setTimeout>; talking: boolean } | null>(null);
   const [review, setReview] = useState(() => localStorage.getItem('voiceReview') === 'true');
 
   useEffect(() => localStorage.setItem('voiceReview', String(review)), [review]);
@@ -84,23 +94,57 @@ export function Chat({
   };
 
   useEffect(() => {
-    if (!speech.supported) return;
     const down = (e: KeyboardEvent) => {
-      if (e.code !== 'Space' || e.repeat || isEditable(document.activeElement)) return;
+      const held = spaceHeld.current;
+      if (e.code !== 'Space') {
+        // Another key before Space comes up means Space was a quick tap while typing.
+        if (held && !held.talking) {
+          clearTimeout(held.timer);
+          spaceHeld.current = null;
+          tapSpace(document.activeElement, textarea.current);
+        }
+        return;
+      }
+      if (held) {
+        e.preventDefault();
+        return;
+      }
+      if (e.isComposing || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (!speech.supported || busy || speech.state !== 'idle' || keepsSpace(document.activeElement, textarea.current)) return;
       e.preventDefault();
-      startTalking();
+      const entry = {
+        talking: false,
+        timer: setTimeout(() => {
+          entry.talking = true;
+          startTalking();
+        }, HOLD_TO_TALK_MS),
+      };
+      spaceHeld.current = entry;
     };
     const up = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && speech.state === 'listening') {
-        e.preventDefault();
-        speech.stop();
-      }
+      const held = spaceHeld.current;
+      if (e.code !== 'Space' || !held) return;
+      e.preventDefault();
+      clearTimeout(held.timer);
+      spaceHeld.current = null;
+      if (held.talking) speech.stop();
+      else tapSpace(document.activeElement, textarea.current);
     };
-    window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
+    const cancel = () => {
+      const held = spaceHeld.current;
+      if (!held) return;
+      clearTimeout(held.timer);
+      spaceHeld.current = null;
+      if (held.talking) speech.stop();
+    };
+    // Capture phase, so a held-back space is typed before React handles the next key, such as Enter.
+    window.addEventListener('keydown', down, true);
+    window.addEventListener('keyup', up, true);
+    window.addEventListener('blur', cancel);
     return () => {
-      window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
+      window.removeEventListener('keydown', down, true);
+      window.removeEventListener('keyup', up, true);
+      window.removeEventListener('blur', cancel);
     };
   });
 

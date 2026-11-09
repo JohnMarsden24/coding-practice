@@ -28,7 +28,7 @@ Your level for a topic goes up when you solve it on the first submission with tw
 
 ## Voice
 
-Hold the mic button, or hold Space when you're not typing, and speak. Rough words appear as you talk, and when you let go the message sends. Tick "Review voice messages before sending" to check it first.
+Hold the mic button, or hold Space, and speak. A quick tap of Space still types a space, and in the code editor Space always types. Rough words appear as you talk, and when you let go the message sends. Tick "Review voice messages before sending" to check it first.
 
 The text you send comes from [Whisper](https://github.com/ggml-org/whisper.cpp) on your Mac. When you let go, the recording is transcribed locally in about a second, using the problem's function and parameter names and the topic's terms as hints, so `mergeCrates` and "O(n log n)" come out right. The rough words you see while talking come from the browser's speech recognition, which in Chrome sends audio to Google. One-off setup:
 
