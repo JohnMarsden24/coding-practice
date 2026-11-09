@@ -28,7 +28,18 @@ Your level for a topic goes up when you solve it on the first submission with tw
 
 ## Voice
 
-Hold the mic button, or hold Space when you're not typing, and speak. Your words appear in the message box and send when you let go. Tick "Review voice messages before sending" to check them first. This uses the browser's built-in speech recognition, so it works in Chrome and Safari but not Firefox. Chrome sends the audio to Google for recognition.
+Hold the mic button, or hold Space when you're not typing, and speak. Rough words appear as you talk, and when you let go the message sends. Tick "Review voice messages before sending" to check it first.
+
+The text you send comes from [Whisper](https://github.com/ggml-org/whisper.cpp) on your Mac. When you let go, the recording is transcribed locally in about a second, using the problem's function and parameter names and the topic's terms as hints, so `mergeCrates` and "O(n log n)" come out right. The rough words you see while talking come from the browser's speech recognition, which in Chrome sends audio to Google. One-off setup:
+
+```sh
+brew install whisper-cpp ffmpeg
+mkdir -p data/models
+curl -L -o data/models/ggml-large-v3-turbo-q5_0.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin
+```
+
+Without Whisper, the browser's transcript is what gets sent. That only works in Chrome and Safari. The footer under the message box says which one is in use.
 
 ## Other commands
 

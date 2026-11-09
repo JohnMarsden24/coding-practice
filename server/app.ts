@@ -9,6 +9,7 @@ import type { SessionRow, Store } from './db';
 import { generateProblem, publicProblem, runSettings, testsFor } from './problems';
 import { quizQuestions, scoreQuiz } from './quiz';
 import { runTests } from './runner';
+import { transcribe, vocabulary, whisperAvailable } from './voice';
 
 function publicRun(run: RunResult): RunResult {
   return {
@@ -74,6 +75,8 @@ export function createApp({ store, claude }: { store: Store; claude: Claude }) {
 
   app.get('/quiz', (c) => c.json(quizQuestions()));
 
+  app.get('/voice', async (c) => c.json({ whisper: await whisperAvailable() }));
+
   app.post('/quiz', async (c) => {
     const { answers } = await c.req.json<{ answers: Record<string, string | null> }>();
     const result = scoreQuiz(answers ?? {});
@@ -136,6 +139,15 @@ export function createApp({ store, claude }: { store: Store; claude: Claude }) {
       store.updateSession(session.id, { revealed: outcome.revealed, hints: outcome.hints });
       await emit('done', { session: detail(store.getSession(session.id)!) });
     });
+  });
+
+  app.post('/sessions/:id/transcribe', async (c) => {
+    const session = load(c);
+    if (!(await whisperAvailable())) return c.json({ error: 'Whisper is not installed on this machine.' }, 503);
+    const audio = new Uint8Array(await c.req.arrayBuffer());
+    if (!audio.length) throw new BadRequest('No audio was sent.');
+    if (audio.length > 20 * 1024 * 1024) throw new BadRequest('That recording is too long.');
+    return c.json({ text: await transcribe(audio, vocabulary(session.problem)) });
   });
 
   app.post('/sessions/:id/run', async (c) => {

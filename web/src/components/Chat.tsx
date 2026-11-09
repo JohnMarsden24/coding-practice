@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChatMessage, MessageKind } from '../../../shared/types';
-import { speechSupported, useSpeech } from '../useSpeech';
+import { useVoice } from '../useVoice';
 import { Icon } from './Icons';
 
 export interface Streaming {
@@ -32,6 +32,7 @@ function isEditable(el: Element | null): boolean {
 }
 
 export function Chat({
+  sessionId,
   messages,
   pending,
   streaming,
@@ -41,6 +42,7 @@ export function Chat({
   onSend,
   hintsUsed,
 }: {
+  sessionId: string;
   messages: ChatMessage[];
   pending: string | null;
   streaming: Streaming | null;
@@ -60,7 +62,8 @@ export function Chat({
 
   const combine = (spoken: string) => [base.current, spoken].filter(Boolean).join(base.current.endsWith(' ') ? '' : ' ');
 
-  const speech = useSpeech({
+  const speech = useVoice({
+    sessionId,
     onText: (spoken) => setDraft(combine(spoken)),
     onDone: (spoken) => {
       const text = combine(spoken).trim();
@@ -75,20 +78,20 @@ export function Chat({
   });
 
   const startTalking = () => {
-    if (busy || speech.listening) return;
+    if (busy || speech.state !== 'idle') return;
     base.current = draft;
     speech.start();
   };
 
   useEffect(() => {
-    if (!speechSupported) return;
+    if (!speech.supported) return;
     const down = (e: KeyboardEvent) => {
       if (e.code !== 'Space' || e.repeat || isEditable(document.activeElement)) return;
       e.preventDefault();
       startTalking();
     };
     const up = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && speech.listening) {
+      if (e.code === 'Space' && speech.state === 'listening') {
         e.preventDefault();
         speech.stop();
       }
@@ -137,12 +140,20 @@ export function Chat({
         </div>
       </div>
       <div className="composer-wrap">
-        <div className={`composer ${speech.listening ? 'listening' : ''}`}>
+        <div className={`composer ${speech.state === 'listening' ? 'listening' : ''}`}>
           <textarea
             ref={textarea}
             rows={1}
             value={draft}
-            placeholder={speech.listening ? 'Listening…' : speechSupported ? 'Talk it through… (hold Space to speak)' : 'Talk it through…'}
+            placeholder={
+              speech.state === 'listening'
+                ? 'Listening…'
+                : speech.state === 'transcribing'
+                  ? 'Transcribing…'
+                  : speech.supported
+                    ? 'Talk it through… (hold Space to speak)'
+                    : 'Talk it through…'
+            }
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -154,17 +165,17 @@ export function Chat({
           />
           <div className="composer-actions">
             <button
-              className={`icon-button mic ${speech.listening ? 'on' : ''}`}
-              disabled={!speechSupported || busy}
-              title={speechSupported ? 'Hold to talk' : 'Voice input needs Chrome or Safari'}
+              className={`icon-button mic ${speech.state === 'listening' ? 'on' : ''}`}
+              disabled={!speech.supported || busy || speech.state === 'transcribing'}
+              title={speech.supported ? 'Hold to talk' : 'Voice input needs Whisper installed, or Chrome or Safari'}
               onPointerDown={(e) => {
                 e.preventDefault();
                 startTalking();
               }}
               onPointerUp={() => speech.stop()}
-              onPointerLeave={() => speech.listening && speech.stop()}
+              onPointerLeave={() => speech.state === 'listening' && speech.stop()}
             >
-              <Icon name="mic" size={18} />
+              {speech.state === 'transcribing' ? <span className="spinner" /> : <Icon name="mic" size={18} />}
             </button>
             <button className="icon-button send" disabled={!draft.trim() || busy} onClick={send} title="Send (Enter)">
               <Icon name="send" size={18} />
@@ -172,13 +183,18 @@ export function Chat({
           </div>
         </div>
         <div className="composer-footer">
-          {speechSupported ? (
-            <label className="toggle">
-              <input type="checkbox" checked={review} onChange={(e) => setReview(e.target.checked)} />
-              Review voice messages before sending
-            </label>
+          {speech.supported ? (
+            <>
+              <label className="toggle">
+                <input type="checkbox" checked={review} onChange={(e) => setReview(e.target.checked)} />
+                Review voice messages before sending
+              </label>
+              <span title={speech.engine === 'whisper' ? 'Transcribed on this Mac by Whisper' : "Transcribed by the browser's speech recognition"}>
+                {speech.engine === 'whisper' ? 'Whisper' : 'Browser voice'}
+              </span>
+            </>
           ) : (
-            <span>Voice input needs Chrome or Safari</span>
+            <span>Voice input needs Whisper installed, or Chrome or Safari</span>
           )}
           {speech.error && <span className="error-text">{speech.error}</span>}
           <span className="spacer" />
