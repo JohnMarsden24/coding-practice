@@ -1,0 +1,39 @@
+{
+  "name": "coding-practice",
+  "version": "1.0.0",
+  "description": "Practise coding interview problems with Claude as a fellow engineer",
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c yellow,cyan \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "tsx watch --clear-screen=false server/index.ts",
+    "dev:web": "vite",
+    "build": "vite build",
+    "start": "vite build && NODE_ENV=production tsx server/index.ts",
+    "test": "node --import tsx --test \"server/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "dependencies": {
+    "@anthropic-ai/bedrock-sdk": "^1.1.1",
+    "@anthropic-ai/sdk": "^1.6.0",
+    "@hono/node-server": "^2.1.6",
+    "esbuild": "^0.28.2",
+    "hono": "^4.13.17",
+    "monaco-editor": "^0.57.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "concurrently": "^10.0.7",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.7"
+  },
+  "private": true
+}
