@@ -30,8 +30,9 @@ export function whisperAvailable(): Promise<boolean> {
   return available;
 }
 
+// Spoken forms, because Whisper drops "of n log n" after "O" unless the prompt shows it spoken. writeBigO converts them.
 const COMMON_TERMS =
-  'O(1), O(log n), O(n), O(n log n), O(n²), time complexity, space complexity, array, hash map, hash set, index, pointer, loop, recursion, edge case, brute force, TypeScript, return, null, undefined';
+  'O of 1, O of log n, O of n, O of n log n, O of n squared, Big O, time complexity, space complexity, array, hash map, hash set, index, pointer, loop, recursion, edge case, brute force, TypeScript, return, null, undefined';
 
 const TOPIC_TERMS: Record<TopicId, string> = {
   'arrays-hashing': 'frequency count, Map, Set, prefix sum',

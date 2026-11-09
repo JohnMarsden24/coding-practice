@@ -190,14 +190,15 @@ export function useVoice({
     recorder.current = null;
   }, []);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // React's development mode mounts, unmounts and remounts each component, so set this on every mount.
+    mounted.current = true;
+    return () => {
       mounted.current = false;
       recognition.current?.abort();
       if (recorder.current?.state === 'recording') recorder.current.stop();
-    },
-    [],
-  );
+    };
+  }, []);
 
   return {
     state,
