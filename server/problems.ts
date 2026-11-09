@@ -5,6 +5,7 @@ import { topicName, type Level, type TopicId } from '../shared/curriculum';
 import type { Problem, PublicProblem, TestCase } from '../shared/types';
 import { models, type Claude } from './claude';
 import { runTests, type RunRequest } from './runner';
+import { PLAIN_LANGUAGE } from './plainLanguage';
 
 const Generated = z.object({
   title: z.string(),
@@ -28,6 +29,10 @@ type Generated = z.infer<typeof Generated>;
 const SYSTEM = `You write original coding interview practice problems for an experienced software engineer who is preparing for interviews. Problems are solved in TypeScript, and a test harness checks them automatically.
 
 Write problems that feel like a real interview question: a small, concrete scenario, clearly solvable in 30 to 45 minutes, that exercises the requested topic at the requested difficulty. Write your own problems rather than restating well known ones word for word.
+
+The statement, example and constraints are shown to the candidate, so write them in plain language:
+
+${PLAIN_LANGUAGE}
 
 The candidate practises clarifying requirements, so split the details:
 - statement: two to five sentences of markdown describing the task. Leave out input sizes, value ranges, and edge case rules.

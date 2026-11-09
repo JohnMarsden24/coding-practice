@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { RunResult } from '../shared/types';
 import { models, type Claude } from './claude';
 import type { SessionRow, StoredMessage } from './db';
+import { PLAIN_LANGUAGE } from './plainLanguage';
 
 export type Emit = (event: string, data: unknown) => Promise<void>;
 
@@ -44,8 +45,10 @@ How to talk
 - Messages may come from speech recognition, so read them generously ("oh of n" means O(n), "hash mat" means hash map).
 - Use markdown sparingly. Inline code is fine. Don't write code blocks longer than a couple of lines.
 
+${PLAIN_LANGUAGE}
+
 How the session runs
-1. Understand. You opened by asking them to restate the problem. Confirm or gently correct their understanding. Answer clarifying questions truthfully from the held-back constraints below, and call reveal_constraint for each one you tell them. Don't volunteer constraints they haven't asked about. If they move on without asking about something important, you may ask once whether there's anything else they'd want to know first.
+1. Understand. You opened by asking them to restate the problem. Confirm or gently correct their understanding. Answer clarifying questions truthfully from the held-back constraints below, and call reveal_constraint for each one you tell them. Don't volunteer constraints they haven't asked about, and don't use numbers from them in your examples. Illustrate with the example from the statement or small made-up values instead. If they move on without asking about something important, you may ask once whether there's anything else they'd want to know first.
 2. Approach. Before they code, ask them to talk through their approach and its time and space complexity. If their code shows they've started without doing this, nudge them once to talk it through. Engage with their idea on its merits. If it works, say so, even if it isn't the intended approach. If it's correct but slow, ask questions that help them see why.
 3. Code. Each of their messages ends with a <workspace> block holding their current code and latest test run. Don't comment on the code unless they ask, they've just run the tests, or they seem stuck.
 4. Test and submit. Encourage them to trace an example or edge case by hand. Submitting is their call. After a submission you'll see the result, and feedback from a reviewer may follow in the conversation. Help them with follow-up questions.
@@ -54,9 +57,9 @@ Hints
 Only give a hint when they ask for help or are clearly stuck, for example they say they don't know, they repeat the same failing idea, or their runs keep failing the same way. Climb this ladder one rung at a time, starting from the rung after the highest one already given (the workspace lists hints given so far):
 1. A question back to them that points at what to look at ("what's slow about the current approach?").
 2. A pointer towards the idea without naming it ("is there a structure that gives you constant time lookups?").
-3. The pattern or technique by name, and why it fits.
+3. The pattern or technique by name, what it means in plain words, and why it fits.
 4. A pseudocode skeleton of the approach in plain steps, not TypeScript.
-Call record_hint with the rung number every time you give a hint. Explaining the problem, answering a clarifying question, and helping with TypeScript syntax or standard library calls are not hints.
+Call record_hint with the rung number every time you give a hint. Explaining the problem, answering a clarifying question, explaining what a word or idea means, and helping with TypeScript syntax or standard library calls are not hints. When they ask what something means, answer in plain words with an example from this problem.
 
 Never write the solution or fix their code for them while the session is open, even if they ask. Offer the next rung instead, and mention that the Give up button shows a full solution with a walkthrough.
 
@@ -272,7 +275,7 @@ async function streamText(claude: Claude, system: string, content: string, emit:
 export function feedback(claude: Claude, session: SessionRow, stored: StoredMessage[], code: string, run: RunResult, emit: Emit) {
   return streamText(
     claude,
-    'You give feedback on a practice coding interview as a fellow senior engineer. Be honest, specific and encouraging, without empty praise. The candidate has six years of industry experience and no computer science degree.',
+    'You give feedback on a practice coding interview as a fellow senior engineer. Be honest, specific and encouraging, without empty praise. The candidate has six years of industry experience and no computer science degree.\n\n' + PLAIN_LANGUAGE,
     `${reviewContext(session, stored, code, run)}
 
 This is submission ${session.submissions}. Write feedback in markdown with exactly two sections, "### What worked well" and "### What to work on", with two to four short bullets each. Cover correctness (from the test results), the time and space complexity of their solution compared with the best possible, code clarity, and how well they talked through their reasoning in the conversation. Under What to work on, mention any important constraint they never asked about. If tests failed, say what kind of case failed and point towards the cause without writing the fix, because they may fix it and resubmit. Describe hidden tests by the kind of case they cover, never by their inputs or expected values. Don't include solution code.`,
@@ -283,7 +286,7 @@ This is submission ${session.submissions}. Write feedback in markdown with exact
 export function walkthrough(claude: Claude, session: SessionRow, stored: StoredMessage[], code: string, emit: Emit) {
   return streamText(
     claude,
-    'You explain a model solution to a practice coding interview problem as a fellow senior engineer. The candidate has six years of industry experience and no computer science degree.',
+    'You explain a model solution to a practice coding interview problem as a fellow senior engineer. The candidate has six years of industry experience and no computer science degree.\n\n' + PLAIN_LANGUAGE,
     `${reviewContext(session, stored, code, session.lastRun ?? { passed: 0, total: 0, results: [] })}
 
 They've given up and the reference solution is now shown next to the chat. Walk them through it in markdown, in under 300 words: the key insight, how the solution works step by step, why it's correct, and its time and space complexity. Then say briefly how it relates to what they tried, so they can see where their thinking was heading. Refer to the code they can see rather than repeating it in full. Short snippets are fine.`,

@@ -18,7 +18,7 @@ const QUESTIONS: Question[] = [
     question: 'You need to check whether any value appears twice in an unsorted array of n numbers. Which approach has the best time complexity?',
     answer: 'Add each value to a hash set, checking whether it is already there first: O(n)',
     wrong: ['Compare every pair of values: O(n²)', 'Sort the array, then compare neighbours: O(n log n)', 'Binary search for each value in the array: O(n log n)'],
-    explanation: 'Hash set lookups and inserts are O(1) on average, so one pass is enough. Sorting works too but costs O(n log n).',
+    explanation: 'A hash set answers "have I seen this value?" in about the same time however many values it holds. So one pass through the array is enough, and the work grows in step with the array: O(n). Sorting works too, but sorting alone costs a bit more, O(n log n).',
   },
   {
     id: 'arrays-2',
@@ -34,7 +34,7 @@ const QUESTIONS: Question[] = [
     question: 'In a sorted array, find two numbers that add up to a target using O(1) extra space. What is the classic approach?',
     answer: 'Start a pointer at each end. Move the left one right when the sum is too small, and the right one left when it is too big',
     wrong: ['Nested loops checking every pair', 'Store every number in a hash set and look up target minus each number', 'Recursively split the array in half'],
-    explanation: 'Because the array is sorted, each move rules out a whole row of pairs, giving O(n) time and O(1) space. The hash set works but uses O(n) space.',
+    explanation: 'Because the array is sorted, a sum that is too small can only be fixed with a bigger left number, and one that is too big only with a smaller right number. Each move rules out one number for good, so you finish in a single pass with no extra storage. The hash set also works, but it has to remember every number.',
   },
   {
     id: 'two-pointers-2',
@@ -50,7 +50,7 @@ const QUESTIONS: Question[] = [
     question: 'For "longest substring without repeating characters", why does a sliding window run in O(n) instead of O(n²)?',
     answer: 'Each character enters the window once and leaves it at most once',
     wrong: ['The string is sorted first', 'It binary searches on the length of the substring', 'It only checks substrings of one fixed length'],
-    explanation: 'Both edges of the window only move forward, so the total work is proportional to the length of the string.',
+    explanation: 'Both ends of the window only ever move forward, so each character is added once and removed at most once. The work grows in step with the length of the string instead of checking every possible substring.',
   },
   {
     id: 'sliding-window-2',
@@ -74,7 +74,7 @@ const QUESTIONS: Question[] = [
     question: '"For each day, how many days until a warmer temperature?" The efficient solution keeps a stack of day indexes. What is true about that stack?',
     answer: 'The temperatures of the days on it are decreasing from bottom to top',
     wrong: ['It holds every index seen so far, in order', 'It only ever holds one index', 'The temperatures on it are sorted from lowest to highest from bottom to top'],
-    explanation: 'This is a monotonic stack. A warmer day pops every colder day waiting on the stack, which answers them all in O(n) overall.',
+    explanation: 'Each day waits on the stack until a warmer day arrives. That warmer day pops every colder day off the top and answers them all at once, then waits on top itself. So the stack always runs from warmest at the bottom to coldest at the top. A stack kept in sorted order like this is called a monotonic stack. Each day goes on and comes off once, so it is one pass.',
   },
   {
     id: 'binary-search-1',
@@ -82,7 +82,7 @@ const QUESTIONS: Question[] = [
     question: 'Roughly how many comparisons does binary search need, at most, on a sorted array of 1,000,000 items?',
     answer: 'About 20',
     wrong: ['About 1,000', 'About 500,000', 'About 1,000,000'],
-    explanation: 'Each comparison halves the range, and 2 to the power of 20 is just over a million, so log₂(1,000,000) is about 20.',
+    explanation: 'Each comparison throws away half of what is left. Halving 1,000,000 about 20 times gets you down to a single item, because 2 multiplied by itself 20 times is just over a million.',
   },
   {
     id: 'binary-search-2',
@@ -98,7 +98,7 @@ const QUESTIONS: Question[] = [
     question: 'How do you detect a cycle in a linked list using O(1) extra memory?',
     answer: 'Move a slow pointer one step and a fast pointer two steps at a time. If they meet, there is a cycle',
     wrong: ['Store each visited node in a hash set', 'Reverse the list and compare it with the original', 'Count nodes and assume a cycle after 10,000'],
-    explanation: 'This is Floyd\'s cycle detection. The hash set works too but uses O(n) memory.',
+    explanation: 'If there is a loop, the fast pointer goes round it and catches the slow one from behind, like a faster runner lapping a slower one on a track. If there is no loop, the fast pointer just reaches the end. This is known as Floyd\'s cycle detection. The hash set works too, but it has to remember every node.',
   },
   {
     id: 'linked-lists-2',
@@ -106,7 +106,7 @@ const QUESTIONS: Question[] = [
     question: 'What is the time complexity of inserting a new node right after a node you already have a reference to?',
     answer: 'O(1)',
     wrong: ['O(log n)', 'O(n)', 'O(n²)'],
-    explanation: 'You only rewire two next pointers. Finding the node is what usually costs O(n).',
+    explanation: 'You only change two pointers: the existing node points to the new one, and the new one points to whatever came after. That takes the same time however long the list is. Finding the node in the first place is what is usually slow, because you have to walk the list.',
   },
   {
     id: 'trees-1',
@@ -122,7 +122,7 @@ const QUESTIONS: Question[] = [
     question: 'You want to return the values of a binary tree level by level. Which structure drives the traversal?',
     answer: 'A queue',
     wrong: ['A stack', 'A min heap', 'A hash map'],
-    explanation: 'This is breadth-first search. A queue processes nodes in the order they were discovered, so one level finishes before the next starts.',
+    explanation: 'A queue hands things back in the order they went in. Put the root in, and each time you take a node out, add its children to the back. Everything on one level comes out before anything on the next. This is called breadth-first search.',
   },
   {
     id: 'tries-1',
@@ -146,7 +146,7 @@ const QUESTIONS: Question[] = [
     question: 'Numbers arrive one at a time and you need to keep track of the k largest. Which approach is efficient?',
     answer: 'Keep a min heap of size k, removing the smallest whenever it grows past k',
     wrong: ['Sort every number seen so far each time a new one arrives', 'Keep a hash set of every number seen', 'Keep a stack and pop whenever a bigger number arrives'],
-    explanation: 'The top of the min heap is the smallest of your k largest, so each new number is one comparison and O(log k) work.',
+    explanation: 'A min heap always keeps its smallest item on top. If it holds the k largest numbers so far, the top is the smallest of those. Each new number only needs comparing with the top, and if it is bigger it replaces it. Keeping the heap in order after that is quick because the heap never holds more than k numbers.',
   },
   {
     id: 'heaps-2',
@@ -154,7 +154,7 @@ const QUESTIONS: Question[] = [
     question: 'What is at the top of a min heap, and how long does removing it take?',
     answer: 'The smallest element, and removing it takes O(log n)',
     wrong: ['The smallest element, and removing it takes O(1)', 'The most recently added element, and removing it takes O(1)', 'The median element, and removing it takes O(log n)'],
-    explanation: 'Reading the top is O(1), but removing it means moving the last element to the top and sifting it down, which is O(log n).',
+    explanation: 'Looking at the top is instant. Removing it means moving the last item to the top and letting it sink, swapping with its smaller child each step, until the order is right again. The heap is a balanced tree, so the sinking takes only about log n steps: around 20 for a million items.',
   },
   {
     id: 'intervals-1',
@@ -178,7 +178,7 @@ const QUESTIONS: Question[] = [
     question: 'Which algorithm finds the shortest path, counted in edges, in an unweighted graph?',
     answer: 'Breadth-first search',
     wrong: ['Depth-first search', 'Topological sort', 'Nothing simpler than Dijkstra\'s algorithm will work'],
-    explanation: 'BFS explores in rings of distance 1, 2, 3, so the first time it reaches a node is by a shortest path. Dijkstra works but is not needed without weights.',
+    explanation: 'Breadth-first search visits everything one edge away first, then everything two edges away, and so on. So the first time it reaches a node, it got there in the fewest possible edges. Dijkstra\'s algorithm also works, but you only need it when edges have different lengths.',
   },
   {
     id: 'graphs-2',
@@ -186,7 +186,7 @@ const QUESTIONS: Question[] = [
     question: 'You count the islands in a grid of 1s (land) and 0s (water). What is the core idea?',
     answer: 'Scan every cell, and on each unvisited 1 start a DFS or BFS that marks the whole island as visited, counting each start',
     wrong: ['Count every 1 in the grid', 'Sort each row, then count the runs of 1s', 'Binary search each row for its first 1'],
-    explanation: 'Each search floods one whole island, so the number of searches you start is the number of islands.',
+    explanation: 'Each search spreads out from one piece of land and marks every connected piece of land as visited, so it covers exactly one island. Count how many searches you had to start and you have the number of islands.',
   },
   {
     id: 'backtracking-1',
@@ -202,7 +202,7 @@ const QUESTIONS: Question[] = [
     question: 'What makes an algorithm backtracking rather than plain recursion?',
     answer: 'You make a choice, explore from it, then undo the choice before trying the next one',
     wrong: ['It always caches results it has already computed', 'It only works on trees', 'It always runs in polynomial time'],
-    explanation: 'Choose, explore, un-choose. Undoing the choice lets you reuse one partial solution as you walk the whole decision tree.',
+    explanation: 'Choose, explore, then undo. For subsets: add 1, explore every subset that includes 1, then take 1 out again before trying without it. Undoing means you keep building on one list instead of copying it for every possibility.',
   },
   {
     id: 'greedy-1',
@@ -218,7 +218,7 @@ const QUESTIONS: Question[] = [
     question: 'When is a greedy algorithm safe to use?',
     answer: 'When you can show that the best local choice never rules out the best overall answer',
     wrong: ['Whenever the input is sorted', 'Whenever the problem asks for a maximum', 'Always. It is just a faster version of dynamic programming'],
-    explanation: 'Greedy is fast, but only correct when each local choice is safe. Coin change with odd denominations is a classic case where it fails.',
+    explanation: 'Greedy means always taking the option that looks best right now and never going back. It is fast, but only correct when that choice can never cost you later. Coins of 1, 3 and 4 are a classic failure: to make 6, greedy takes 4 + 1 + 1 (three coins), but 3 + 3 needs only two.',
   },
   {
     id: 'dp-1',
@@ -226,12 +226,12 @@ const QUESTIONS: Question[] = [
     question: 'Naive recursive Fibonacci is O(2ⁿ). What turns it into O(n)?',
     answer: 'Caching each result so every fib(i) is only computed once',
     wrong: ['Replacing the recursion with a stack', 'Sorting the intermediate results', 'Using breadth-first search'],
-    explanation: 'The naive version recomputes the same subproblems over and over. Memoisation, or building up from the bottom, computes each one once.',
+    explanation: 'The naive version works out the same values again and again: fib(5) asks for fib(3) twice, and each of those repeats more work. Saving each answer the first time you work it out (called memoisation), or building the answers up from fib(0), means each one is worked out once.',
   },
   {
     id: 'dp-2',
     topic: 'dynamic-programming',
-    question: 'You can climb 1 or 2 stairs at a time. Which recurrence counts the ways to reach stair n?',
+    question: 'You can climb 1 or 2 stairs at a time. Which formula counts the ways to reach stair n?',
     answer: 'ways(n) = ways(n − 1) + ways(n − 2)',
     wrong: ['ways(n) = 2 × ways(n − 1)', 'ways(n) = n²', 'ways(n) = ways(n − 1) + 1'],
     explanation: 'Your last move was either a single step from n − 1 or a double step from n − 2, so you add the ways of reaching each.',
