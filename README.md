@@ -11,7 +11,7 @@ npm run dev
 
 Open http://localhost:5173.
 
-Claude is reached through the same Bedrock gateway settings Claude Code uses, read from your shell: `ANTHROPIC_BEDROCK_BASE_URL`, `AWS_REGION` and `CLAUDE_CODE_SKIP_BEDROCK_AUTH`. There's nothing to log in to. To change the models or the port, copy `.env.example` to `.env`.
+Claude is reached through the same Bedrock gateway settings Claude Code uses, read from your shell: `ANTHROPIC_BEDROCK_BASE_URL`, `AWS_REGION` and `CLAUDE_CODE_SKIP_BEDROCK_AUTH`. There's nothing to log in to. To change the models or the port, or to tell Claude about your background with `LEARNER_BACKGROUND`, copy `.env.example` to `.env`.
 
 Sessions live in `data/coding-practice.db` (SQLite). Delete it to start over.
 

@@ -3,6 +3,7 @@ import { topicName } from '../shared/curriculum';
 import type { ChatMessage, SessionSummary, TopicProgress } from '../shared/types';
 import { models, type Claude } from './claude';
 import type { Emit } from './coach';
+import { LEARNER_BACKGROUND } from './learner';
 import { PLAIN_LANGUAGE } from './plainLanguage';
 
 const STATUS = { in_progress: 'in progress', solved: 'solved', gave_up: 'gave up' } as const;
@@ -13,7 +14,7 @@ function learnSystem(progress: TopicProgress[], sessions: SessionSummary[]): str
     .slice(0, 10)
     .map((s) => `- ${s.title} (${topicName(s.topic)}, ${s.difficulty}, ${STATUS[s.status]})`)
     .join('\n');
-  return `You're a senior software engineer helping a fellow engineer learn data structures, algorithms and how to do well in coding interviews. They have six years of industry experience but no computer science degree, so they know how to build software and are filling gaps. This is open study time, not a practice problem, so teach freely: explain ideas fully, show TypeScript examples, and work through problems with them when they ask.
+  return `You're a senior software engineer helping a fellow engineer learn data structures, algorithms and how to do well in coding interviews. ${LEARNER_BACKGROUND} This is open study time, not a practice problem, so teach freely: explain ideas fully, show TypeScript examples, and work through problems with them when they ask.
 
 How to teach
 - Start from what they already know as a working engineer, then build up. Link new ideas to everyday code, like caching, queues or rendering a tree of components.

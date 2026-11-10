@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { RunResult } from '../shared/types';
 import { models, type Claude } from './claude';
 import type { SessionRow, StoredMessage } from './db';
+import { LEARNER_BACKGROUND } from './learner';
 import { PLAIN_LANGUAGE } from './plainLanguage';
 
 export type Emit = (event: string, data: unknown) => Promise<void>;
@@ -38,7 +39,7 @@ const TOOLS: Anthropic.Tool[] = [
 
 function chatSystem(session: SessionRow): string {
   const p = session.problem;
-  return `You're a senior software engineer pairing with a fellow engineer who is practising for coding interviews. They have six years of industry experience but no computer science degree, so they know how to build software and are filling gaps in data structures and algorithms. You're a peer helping them think, not an interviewer grading them.
+  return `You're a senior software engineer pairing with a fellow engineer who is practising for coding interviews. ${LEARNER_BACKGROUND} You're a peer helping them think, not an interviewer grading them.
 
 How to talk
 - Be warm, direct and brief: usually two to four sentences. Ask one question at a time.
@@ -275,7 +276,7 @@ async function streamText(claude: Claude, system: string, content: string, emit:
 export function feedback(claude: Claude, session: SessionRow, stored: StoredMessage[], code: string, run: RunResult, emit: Emit) {
   return streamText(
     claude,
-    'You give feedback on a practice coding interview as a fellow senior engineer. Be honest, specific and encouraging, without empty praise. The candidate has six years of industry experience and no computer science degree.\n\n' + PLAIN_LANGUAGE,
+    `You give feedback on a practice coding interview as a fellow senior engineer. Be honest, specific and encouraging, without empty praise. About the candidate: ${LEARNER_BACKGROUND}\n\n${PLAIN_LANGUAGE}`,
     `${reviewContext(session, stored, code, run)}
 
 This is submission ${session.submissions}. Write feedback in markdown with exactly two sections, "### What worked well" and "### What to work on", with two to four short bullets each. Cover correctness (from the test results), the time and space complexity of their solution compared with the best possible, code clarity, and how well they talked through their reasoning in the conversation. Under What to work on, mention any important constraint they never asked about. If tests failed, say what kind of case failed and point towards the cause without writing the fix, because they may fix it and resubmit. Describe hidden tests by the kind of case they cover, never by their inputs or expected values. Don't include solution code.`,
@@ -286,7 +287,7 @@ This is submission ${session.submissions}. Write feedback in markdown with exact
 export function walkthrough(claude: Claude, session: SessionRow, stored: StoredMessage[], code: string, emit: Emit) {
   return streamText(
     claude,
-    'You explain a model solution to a practice coding interview problem as a fellow senior engineer. The candidate has six years of industry experience and no computer science degree.\n\n' + PLAIN_LANGUAGE,
+    `You explain a model solution to a practice coding interview problem as a fellow senior engineer. About the candidate: ${LEARNER_BACKGROUND}\n\n${PLAIN_LANGUAGE}`,
     `${reviewContext(session, stored, code, session.lastRun ?? { passed: 0, total: 0, results: [] })}
 
 They've given up and the reference solution is now shown next to the chat. Walk them through it in markdown, in under 300 words: the key insight, how the solution works step by step, why it's correct, and its time and space complexity. Then say briefly how it relates to what they tried, so they can see where their thinking was heading. Refer to the code they can see rather than repeating it in full. Short snippets are fine.`,
