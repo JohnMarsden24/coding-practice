@@ -1,16 +1,20 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import type { RunResult } from '../shared/types';
+import { z } from 'zod';
+import type { RunResult, SessionMode, TeachingTrace } from '../shared/types';
 import { models, type Claude } from './claude';
 import type { SessionRow, StoredMessage } from './db';
 import { LEARNER_BACKGROUND } from './learner';
 import { PLAIN_LANGUAGE } from './plainLanguage';
+import { Trace } from './teaching';
 
 export type Emit = (event: string, data: unknown) => Promise<void>;
 
 export const OPENING_GREETING = "Hi, I'm ready for a problem.";
 
-export function openingMessage(title: string): string {
-  return `Here's your problem: **${title}**. Have a read of the statement on the right.\n\nBefore we get into solutions, can you tell me in your own words what it's asking? Ask me anything you'd want to clarify too, like input sizes or edge cases.`;
+export function openingMessage(title: string, mode: SessionMode = 'guided'): string {
+  return mode === 'guided'
+    ? `Let's work through **${title}** one idea at a time. The requirements are on the right. Start with the small example: what should the function return, and why? If you're unsure, I can demonstrate one step and let you try the next.`
+    : `Here's a fresh problem: **${title}**. Try it on your own, choosing an approach and checking your code. You can ask me to clarify the requirements. Choose "Get teaching help" whenever you want a demonstration; that turns this into guided learning.`;
 }
 
 const TOOLS: Anthropic.Tool[] = [
@@ -27,7 +31,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'record_hint',
-    description: 'Call this every time you give a hint from the hint ladder, with the rung you gave.',
+    description: 'Record teaching support: 1 = focused question, 2 = concrete pointer, 3 = named idea with explanation, 4 = worked example or code scaffold. Explicit requests can skip straight to the needed support.',
     input_schema: {
       type: 'object',
       properties: { rung: { type: 'integer', enum: [1, 2, 3, 4] } },
@@ -35,38 +39,45 @@ const TOOLS: Anthropic.Tool[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'show_trace',
+    description: 'Show a small worked example as cells and steps beside the chat. Use real values from a visible or made up example. active identifies cells still under consideration; focus is the cell being inspected; candidate is a saved possible answer. Explain why cells stay or leave at each step. Add one prediction question before the next step. This is a teaching illustration, not an execution trace of their code. Use for searches, pointers, windows, stacks or a queue when it helps.',
+    input_schema: z.toJSONSchema(Trace, { unrepresentable: 'any' }) as Anthropic.Tool['input_schema'],
+  },
 ];
 
 function chatSystem(session: SessionRow): string {
   const p = session.problem;
+  const teaching = session.mode === 'guided' ? `
+Guided learning
+- Teach one idea at a time. First work through a tiny normal case with real values. Then let them predict the next step. Once that is understood, turn it into code. After the basic behaviour works, add one boundary case at a time, such as repeats or no answer. Discuss time and space complexity last.
+- All requirements are visible. Answer questions directly and volunteer any rule needed to understand the current step.
+- Increase support when they remain stuck. Use a focused question, then a concrete pointer, then explain the idea by name, then a small worked example with a short TypeScript scaffold if needed. Use the highest recorded rung and conversation to move forward; repeated confusion calls for a demonstration, not another version of the same question. When asked for a worked example, go straight to it.
+- Record support with record_hint. Explanations of words, requirements or TypeScript syntax are ordinary teaching, not hints. Support is recorded to distinguish coached work from independent work; needing it is normal.
+- In a worked example, demonstrate one decision with actual values and explain why it is valid, then ask them to make the next decision on different values. For first-match searches, explain why a matching middle value is a possible answer and why earlier positions still need checking. Use show_trace to make remaining possibilities, the inspected value and any saved candidate visible. Call record_hint with rung 4 when showing a trace.
+- If a demonstration still doesn't help, identify the missing prerequisite and use a smaller example. Give short code snippets or partial code when needed, then have them complete a meaningful step. A full solution is available through "Study solution".
+- Their workspace contains their code and latest tests. When they are stuck or have run tests, connect the observed behaviour to the next small change to reason about. Accept any correct approach before discussing speed.
+- After help, ask one prediction or explanation question that checks the reason for the decision, not just the answer. Passing tests with coaching shows practice, not independent mastery.
+` : `
+Independent practice
+- Let them choose an approach and work without coaching. Answer requirements and syntax questions directly. Call reveal_constraint for any requirement you explain.
+- Keep the algorithm, pattern, solution code, worked examples and visual traces private while this independent attempt is open. When they request teaching help, direct them to "Get teaching help", which changes the session to guided learning. Treat their request for help warmly.
+- After a submission, describe what passed or failed and allow them to retry. Evidence from a first independent submission is stronger than a retry following feedback. A fresh review later checks transfer to a different scenario.
+`;
   return `You're a senior software engineer pairing with a fellow engineer who is practising for coding interviews. ${LEARNER_BACKGROUND} You're a peer helping them think, not an interviewer grading them.
 
 How to talk
 - Be warm, direct and brief: usually two to four sentences. Ask one question at a time.
 - Messages may come from speech recognition, so read them generously ("oh of n" means O(n), "hash mat" means hash map).
-- Use markdown sparingly. Inline code is fine. Don't write code blocks longer than a couple of lines.
+- Keep explanations focused, with small code blocks when they help teach the current step.
 
 ${PLAIN_LANGUAGE}
 
-How the session runs
-1. Understand. You opened by asking them to restate the problem. Confirm or gently correct their understanding. Answer clarifying questions truthfully from the held-back constraints below, and call reveal_constraint for each one you tell them. Don't volunteer constraints they haven't asked about, and don't use numbers from them in your examples. Illustrate with the example from the statement or small made-up values instead. If they move on without asking about something important, you may ask once whether there's anything else they'd want to know first.
-2. Approach. Before they code, ask them to talk through their approach and its time and space complexity. If their code shows they've started without doing this, nudge them once to talk it through. Engage with their idea on its merits. If it works, say so, even if it isn't the intended approach. If it's correct but slow, ask questions that help them see why.
-3. Code. Each of their messages ends with a <workspace> block holding their current code and latest test run. Don't comment on the code unless they ask, they've just run the tests, or they seem stuck.
-4. Test and submit. Encourage them to trace an example or edge case by hand. Submitting is their call. After a submission you'll see the result, and feedback from a reviewer may follow in the conversation. Help them with follow-up questions.
-
-Hints
-Only give a hint when they ask for help or are clearly stuck, for example they say they don't know, they repeat the same failing idea, or their runs keep failing the same way. Climb this ladder one rung at a time, starting from the rung after the highest one already given (the workspace lists hints given so far):
-1. A question back to them that points at what to look at ("what's slow about the current approach?").
-2. A pointer towards the idea without naming it ("is there a structure that gives you constant time lookups?").
-3. The pattern or technique by name, what it means in plain words, and why it fits.
-4. A pseudocode skeleton of the approach in plain steps, not TypeScript.
-Call record_hint with the rung number every time you give a hint. Explaining the problem, answering a clarifying question, explaining what a word or idea means, and helping with TypeScript syntax or standard library calls are not hints. When they ask what something means, answer in plain words with an example from this problem.
-
-Never write the solution or fix their code for them while the session is open, even if they ask. Offer the next rung instead, and mention that the Give up button shows a full solution with a walkthrough.
+${teaching}
 
 <problem>
 Title: ${p.title}
-Topic: ${p.topic}, ${p.difficulty}
+${session.mode === 'guided' ? `Topic: ${p.topic}. Learning goal: ${p.learningGoal ?? 'Understand the core behaviour before extending it.'}` : 'Independent attempt: choose a technique without reminders.'}
 Statement shown to them:
 ${p.statement}
 Example: ${p.example.input} → ${p.example.output} (${p.example.explanation})
@@ -75,13 +86,12 @@ ${p.starterCode}
 ${p.prelude ? `Provided code:\n${p.prelude}` : ''}
 </problem>
 
-<held_back_constraints>
+<requirements>
 ${p.constraints.map((c) => `- ${c}`).join('\n')}
-</held_back_constraints>
+</requirements>
 
 <intended_approach>
-This is private context for giving good hints. Don't reveal it except through the hint ladder.
-${p.approach}
+${session.mode === 'guided' ? p.approach : 'The learner chooses their own approach.'}
 </intended_approach>`;
 }
 
@@ -116,6 +126,8 @@ export function workspaceContext(session: SessionRow, code: string): string {
 Hints given so far: ${hints}
 Constraints revealed so far:
 ${revealed}
+Session mode: ${session.mode}
+${session.trace ? `Latest teaching illustration: ${JSON.stringify(session.trace)}` : ''}
 Submissions so far: ${session.submissions}
 Their current code:
 \`\`\`ts
@@ -143,6 +155,7 @@ export interface ChatOutcome {
   reply: string;
   revealed: string[];
   hints: number[];
+  trace: TeachingTrace | null;
 }
 
 export async function chatTurn(
@@ -155,6 +168,7 @@ export async function chatTurn(
   const revealed = [...session.revealed];
   const hints = [...session.hints];
   let reply = '';
+  let trace = session.trace;
 
   for (let round = 0; round < 4; round++) {
     const stream = claude.messages.stream({
@@ -162,7 +176,7 @@ export async function chatTurn(
       max_tokens: 4000,
       system: chatSystem(session),
       output_config: { effort: 'medium' },
-      tools: TOOLS,
+      tools: session.mode === 'guided' ? TOOLS : TOOLS.filter((t) => t.name === 'reveal_constraint'),
       messages,
     });
     let separated = reply === '';
@@ -196,9 +210,22 @@ export async function chatTurn(
         }
         results.push({ type: 'tool_result', tool_use_id: block.id, content: 'Added to their notes.' });
       } else if (block.name === 'record_hint' && [1, 2, 3, 4].includes(input.rung as number)) {
+        if (session.mode !== 'guided') {
+          results.push({ type: 'tool_result', tool_use_id: block.id, content: 'Switch to guided learning before giving support.', is_error: true });
+          continue;
+        }
         hints.push(input.rung as number);
         await emit('hint', { rung: input.rung, total: hints.length });
         results.push({ type: 'tool_result', tool_use_id: block.id, content: `Recorded. Hints given: ${hints.length}.` });
+      } else if (block.name === 'show_trace' && session.mode === 'guided') {
+        const parsed = Trace.safeParse(block.input);
+        if (parsed.success) {
+          trace = parsed.data;
+          await emit('trace', { trace });
+          results.push({ type: 'tool_result', tool_use_id: block.id, content: 'The illustration is shown beside the chat, one step at a time.' });
+        } else {
+          results.push({ type: 'tool_result', tool_use_id: block.id, content: parsed.error.message, is_error: true });
+        }
       } else {
         results.push({ type: 'tool_result', tool_use_id: block.id, content: 'Invalid input.', is_error: true });
       }
@@ -206,7 +233,7 @@ export async function chatTurn(
     messages.push({ role: 'assistant', content: final.content }, { role: 'user', content: results });
   }
 
-  return { reply: reply.trim(), revealed, hints };
+  return { reply: reply.trim(), revealed, hints, trace };
 }
 
 function transcript(stored: StoredMessage[]): string {
@@ -279,7 +306,7 @@ export function feedback(claude: Claude, session: SessionRow, stored: StoredMess
     `You give feedback on a practice coding interview as a fellow senior engineer. Be honest, specific and encouraging, without empty praise. About the candidate: ${LEARNER_BACKGROUND}\n\n${PLAIN_LANGUAGE}`,
     `${reviewContext(session, stored, code, run)}
 
-This is submission ${session.submissions}. Write feedback in markdown with exactly two sections, "### What worked well" and "### What to work on", with two to four short bullets each. Cover correctness (from the test results), the time and space complexity of their solution compared with the best possible, code clarity, and how well they talked through their reasoning in the conversation. Under What to work on, mention any important constraint they never asked about. If tests failed, say what kind of case failed and point towards the cause without writing the fix, because they may fix it and resubmit. Describe hidden tests by the kind of case they cover, never by their inputs or expected values. Don't include solution code.`,
+This is submission ${session.submissions} in ${session.mode} mode. Write brief feedback with two sections, "### What you understood" and "### Next step". Ground claims in their explanations and test results. Pick one next thing to learn or check, rather than a list of weaknesses. For guided learning, focus on the core behaviour and one boundary case; discuss complexity only once correctness makes sense. Requirements were supplied, so asking for them is not a grading criterion. For independent practice, comment on correctness, clarity and complexity when useful. Say whether the result was coached, an independent first attempt, or a retry after feedback. Describe hidden tests by the kind of case they cover, never by their inputs or expected values. If tests failed, point towards the kind of mistake without writing the fix. If they passed, ask one short question about why the key decision is valid, and mention that a fresh independent problem after a delay is stronger evidence of learning. Keep solution code out of feedback.`,
     emit,
   );
 }
@@ -290,7 +317,7 @@ export function walkthrough(claude: Claude, session: SessionRow, stored: StoredM
     `You explain a model solution to a practice coding interview problem as a fellow senior engineer. About the candidate: ${LEARNER_BACKGROUND}\n\n${PLAIN_LANGUAGE}`,
     `${reviewContext(session, stored, code, session.lastRun ?? { passed: 0, total: 0, results: [] })}
 
-They've given up and the reference solution is now shown next to the chat. Walk them through it in markdown, in under 300 words: the key insight, how the solution works step by step, why it's correct, and its time and space complexity. Then say briefly how it relates to what they tried, so they can see where their thinking was heading. Refer to the code they can see rather than repeating it in full. Short snippets are fine.`,
+They chose to study the reference solution, which is shown next to the chat. Teach the core idea with one small worked example and actual values, in under 300 words. Explain why one important decision is correct, then ask them to predict a similar decision on different values. Relate it to what they tried. Leave complexity until the behaviour is understood, and suggest a fresh independent review later. Refer to the visible code rather than repeating it in full. Short snippets are fine.`,
     emit,
   );
 }

@@ -2,7 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import { topicName, type Level, type TopicId } from '../shared/curriculum';
-import type { Problem, PublicProblem, TestCase } from '../shared/types';
+import type { Problem, PublicProblem, SessionMode, TestCase } from '../shared/types';
 import { models, type Claude } from './claude';
 import { runTests, type RunRequest } from './runner';
 import { PLAIN_LANGUAGE } from './plainLanguage';
@@ -22,6 +22,7 @@ const Generated = z.object({
   largeTests: z.array(z.object({ generatorJs: z.string(), description: z.string() })),
   referenceSolution: z.string(),
   approach: z.string(),
+  learningGoal: z.string(),
 });
 
 type Generated = z.infer<typeof Generated>;
@@ -54,6 +55,8 @@ export interface GenerateOptions {
   topic: TopicId;
   difficulty: Level;
   avoidTitles: string[];
+  mode: SessionMode;
+  transferFrom?: Pick<Problem, 'title' | 'statement' | 'approach'>;
   onStatus?: (text: string) => void;
 }
 
@@ -63,6 +66,12 @@ export async function generateProblem(claude: Claude, opts: GenerateOptions): Pr
       role: 'user',
       content: [
         `Write a ${opts.difficulty} problem on the topic "${topicName(opts.topic)}".`,
+        opts.mode === 'guided'
+          ? 'This is guided learning. Teach one core idea with a small concrete task. At easy, use one query or threshold rather than batching several; add at most one boundary complication. Keep the requirements complete in constraints. Write learningGoal as one plain sentence about the behaviour to understand. Start visible tests with the simplest case, then a boundary case, then a small variation. Introduce complexity only after the behaviour makes sense.'
+          : 'This is independent practice. Make the task self contained. Keep the algorithm and topic name out of the title, statement and example. Write learningGoal for the coach only.',
+        opts.transferFrom
+          ? `Check transfer of this previously studied idea in a different scenario, with different values and a different function signature. Use the same underlying reasoning at the same difficulty, but do not copy the statement or remind the learner which technique to use.\nPrevious problem: ${opts.transferFrom.title}\n${opts.transferFrom.statement}\nReasoning to revisit: ${opts.transferFrom.approach}`
+          : '',
         opts.avoidTitles.length
           ? `The candidate has already practised these, so make it clearly different:\n${opts.avoidTitles.map((t) => `- ${t}`).join('\n')}`
           : '',
@@ -126,7 +135,7 @@ async function check(g: Generated, opts: GenerateOptions): Promise<{ problem: Pr
   const visible = g.visibleTests.map((t, i) => parseTest(t, `Visible test ${i + 1}`));
   const hidden = g.hiddenTests.map((t, i) => parseTest(t, `Hidden test ${i + 1}`));
   if (g.visibleTests.length !== 3) problems.push(`There must be exactly 3 visible tests, not ${g.visibleTests.length}.`);
-  if (g.hiddenTests.length < 5) problems.push('Add more hidden edge case tests (at least 6).');
+  if (g.hiddenTests.length < 6) problems.push('Add more hidden edge case tests (at least 6).');
   if (!new RegExp(`\\b${g.functionName}\\b`).test(g.starterCode)) problems.push('starterCode must declare functionName.');
   if (problems.length) return { problems };
 
@@ -146,6 +155,7 @@ async function check(g: Generated, opts: GenerateOptions): Promise<{ problem: Pr
     hiddenTests: [...(hidden as TestCase[]), ...g.largeTests.map((t) => ({ generator: t.generatorJs, expected: null }))],
     referenceSolution: g.referenceSolution,
     approach: g.approach,
+    learningGoal: g.learningGoal,
   };
 
   const tests = testsFor(draft, 'all');
@@ -192,7 +202,7 @@ export function testsFor(problem: Problem, which: 'visible' | 'all'): RunRequest
   return [...visible, ...hidden];
 }
 
-export function publicProblem(problem: Problem, revealed: string[]): PublicProblem {
+export function publicProblem(problem: Problem, revealed: string[], mode: SessionMode = 'guided'): PublicProblem {
   return {
     title: problem.title,
     topic: problem.topic,
@@ -201,7 +211,8 @@ export function publicProblem(problem: Problem, revealed: string[]): PublicProbl
     example: problem.example,
     functionName: problem.functionName,
     prelude: problem.prelude,
-    revealedConstraints: revealed,
+    revealedConstraints: mode === 'guided' ? problem.constraints : revealed,
+    learningGoal: mode === 'guided' ? problem.learningGoal : undefined,
     visibleTests: problem.visibleTests.map((t) => ({ input: t.input ?? [], expected: t.expected })),
     hiddenTestCount: problem.hiddenTests.length,
   };

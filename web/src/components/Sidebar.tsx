@@ -5,7 +5,7 @@ import { api } from '../api';
 import { navigate, type Route } from '../useRoute';
 import { Icon } from './Icons';
 
-const STATUS_LABEL = { in_progress: 'In progress', solved: 'Solved', gave_up: 'Gave up' } as const;
+const STATUS_LABEL = { in_progress: 'In progress', solved: 'Solved', gave_up: 'Studied solution' } as const;
 
 export function Sidebar({
   state,
@@ -85,7 +85,7 @@ export function Sidebar({
             <ListItem
               key={s.id}
               title={s.title}
-              meta={`${topicName(s.topic)} · ${s.difficulty}`}
+              meta={s.mode === 'guided' ? `${topicName(s.topic)} · Guided learning` : 'Independent practice'}
               status={s.status}
               active={s.id === activeId}
               onOpen={() => navigate(`/session/${s.id}`)}

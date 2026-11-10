@@ -21,7 +21,11 @@ export const LEVELS = ['easy', 'medium', 'hard'] as const;
 
 export type Level = (typeof LEVELS)[number];
 
-export const MAX_HINTS_FOR_LEVEL_UP = 2;
+export const LEVEL_LABELS: Record<Level, string> = {
+  easy: 'Starting point',
+  medium: 'Build on it',
+  hard: 'Challenge',
+};
 
 export function topicName(id: string): string {
   return TOPICS.find((t) => t.id === id)?.name ?? id;

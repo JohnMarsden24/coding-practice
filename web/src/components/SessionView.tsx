@@ -6,7 +6,7 @@ import { Chat, type Streaming } from './Chat';
 import { Icon } from './Icons';
 import { Workspace } from './Workspace';
 
-const STATUS = { in_progress: 'In progress', solved: 'Solved', gave_up: 'Gave up' } as const;
+const STATUS = { in_progress: 'In progress', solved: 'Solved', gave_up: 'Studied solution' } as const;
 
 export function SessionView({ id, onChange }: { id: string; onChange: () => Promise<void> }) {
   const [session, setSession] = useState<SessionDetail | null>(null);
@@ -53,6 +53,10 @@ export function SessionView({ id, onChange }: { id: string; onChange: () => Prom
           s ? { ...s, problem: { ...s.problem, revealedConstraints: [...s.problem.revealedConstraints, d.constraint] } } : s,
         ),
       hint: (d) => setSession((s) => (s ? { ...s, hintsUsed: d.total } : s)),
+      trace: (d) => {
+        setPanelOpen(true);
+        setSession((s) => (s ? { ...s, trace: d.trace } : s));
+      },
       done: (d) => setSession(d.session),
     });
     setStreaming(null);
@@ -111,7 +115,7 @@ export function SessionView({ id, onChange }: { id: string; onChange: () => Prom
   };
 
   const giveUp = async () => {
-    if (!confirm('Give up and see the model solution? This counts as not solving it.')) return;
+    if (!confirm('Study the model solution and finish this attempt? Your topic level stays the same.')) return;
     setError(null);
     try {
       setSession(await api.giveUp(id, codeRef.current));
@@ -121,6 +125,26 @@ export function SessionView({ id, onChange }: { id: string; onChange: () => Prom
       setError((e as Error).message);
     } finally {
       setStreaming(null);
+    }
+  };
+
+  const help = async (workedExample: boolean) => {
+    if (!session || busy || running) return;
+    setError(null);
+    setPending('Getting teaching help…');
+    try {
+      if (session.mode === 'independent') {
+        setSession(await api.guided(id));
+        await onChange();
+      }
+      setPending(null);
+      await send(workedExample
+        ? 'Show me a small worked example with real values and a visual trace if useful. Demonstrate one decision and explain why it is valid, then let me try the next decision. I do not need the whole solution.'
+        : 'I am stuck. Help me with the next small step. If we have already tried a question or hint, give me more concrete help rather than rephrasing it.');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPending(null);
     }
   };
 
@@ -134,13 +158,20 @@ export function SessionView({ id, onChange }: { id: string; onChange: () => Prom
         <div className="session-heading">
           <h1>{session.title}</h1>
           <span className="session-meta">
-            {topicName(session.topic)} · {session.difficulty} · <span className={`status-text ${session.status}`}>{STATUS[session.status]}</span>
+            {session.mode === 'guided' ? `Guided learning · ${topicName(session.topic)}` : 'Independent practice'} · <span className={`status-text ${session.status}`}>{STATUS[session.status]}</span>
           </span>
         </div>
         <button className="icon-button" onClick={() => setPanelOpen(!panelOpen)} title={panelOpen ? 'Hide the problem panel' : 'Show the problem panel'}>
           <Icon name="panel" />
         </button>
       </header>
+      <div className="learning-strip">
+        {session.status === 'in_progress'
+          ? session.mode === 'guided' ? 'Understand one example → Try a step → Code it → Check a boundary case' : 'Choose your approach and try it without hints. Teaching help is available whenever you need it.'
+          : session.mode === 'independent' && session.submissions === 1 && session.hintsUsed === 0
+            ? 'Solved independently. A fresh review after a delay will check what you remember.'
+            : 'Practice saved. A fresh independent review is scheduled in two days.'}
+      </div>
       {error && (
         <div className="banner" role="alert">
           {error}
@@ -159,7 +190,7 @@ export function SessionView({ id, onChange }: { id: string; onChange: () => Prom
           setDraft={setDraft}
           busy={busy}
           onSend={send}
-          hintsUsed={session.hintsUsed}
+          hintsUsed={session.mode === 'guided' ? session.hintsUsed : undefined}
         />
         <div className={panelOpen ? 'workspace-wrap' : 'hidden'}>
           <Workspace
@@ -171,6 +202,7 @@ export function SessionView({ id, onChange }: { id: string; onChange: () => Prom
             onRun={run}
             onSubmit={submit}
             onGiveUp={giveUp}
+            onHelp={help}
           />
         </div>
       </div>

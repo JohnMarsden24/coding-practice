@@ -1,6 +1,19 @@
 import type { Level, TopicId } from './curriculum';
 
 export type SessionStatus = 'in_progress' | 'solved' | 'gave_up';
+export type SessionMode = 'guided' | 'independent';
+
+export interface TeachingTrace {
+  title: string;
+  values: string[];
+  steps: {
+    focus: number | null;
+    active: number[];
+    candidate: number | null;
+    explanation: string;
+    prediction: string;
+  }[];
+}
 
 export interface TestCase {
   input?: unknown[];
@@ -21,13 +34,14 @@ export interface Problem {
   prelude: string;
   /** Hidden code defining `adapt(fn, args)` to convert JSON args and results, such as arrays to linked lists. */
   adapter: string;
-  /** Details held back until the candidate asks. */
+  /** Visible in guided learning; clarified on request in independent practice. */
   constraints: string[];
   visibleTests: TestCase[];
   hiddenTests: TestCase[];
   compare: 'exact' | 'unordered';
   referenceSolution: string;
   approach: string;
+  learningGoal?: string;
 }
 
 export interface PublicProblem {
@@ -41,6 +55,7 @@ export interface PublicProblem {
   revealedConstraints: string[];
   visibleTests: { input: unknown[]; expected: unknown }[];
   hiddenTestCount: number;
+  learningGoal?: string;
 }
 
 export interface TestResult {
@@ -80,6 +95,8 @@ export interface SessionSummary {
   difficulty: Level;
   status: SessionStatus;
   updatedAt: number;
+  mode: SessionMode;
+  reviewOf: string | null;
 }
 
 export interface SessionDetail extends SessionSummary {
@@ -89,6 +106,7 @@ export interface SessionDetail extends SessionSummary {
   hintsUsed: number;
   submissions: number;
   lastRun: RunResult | null;
+  trace: TeachingTrace | null;
   /** Only present once the session is solved or given up. */
   referenceSolution?: string;
 }
@@ -98,6 +116,15 @@ export interface TopicProgress {
   level: Level;
   sessions: number;
   solved: number;
+  independentSolved: number;
+}
+
+export interface PracticeReview {
+  topic: TopicId;
+  difficulty: Level;
+  sourceId: string;
+  sourceTitle: string;
+  dueAt: number;
 }
 
 export interface AppState {
@@ -106,6 +133,7 @@ export interface AppState {
   sessions: SessionSummary[];
   learnChats: LearnChatSummary[];
   suggestion: { topic: TopicId; difficulty: Level };
+  reviews: PracticeReview[];
 }
 
 export interface QuizQuestion {

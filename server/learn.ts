@@ -6,13 +6,13 @@ import type { Emit } from './coach';
 import { LEARNER_BACKGROUND } from './learner';
 import { PLAIN_LANGUAGE } from './plainLanguage';
 
-const STATUS = { in_progress: 'in progress', solved: 'solved', gave_up: 'gave up' } as const;
+const STATUS = { in_progress: 'in progress', solved: 'solved', gave_up: 'studied solution' } as const;
 
 function learnSystem(progress: TopicProgress[], sessions: SessionSummary[]): string {
   const levels = progress.map((p) => `- ${topicName(p.topic)}: ${p.level} (${p.solved} of ${p.sessions} solved)`).join('\n');
   const recent = sessions
     .slice(0, 10)
-    .map((s) => `- ${s.title} (${topicName(s.topic)}, ${s.difficulty}, ${STATUS[s.status]})`)
+    .map((s) => `- ${s.title} (${topicName(s.topic)}, ${s.difficulty}, ${s.mode}, ${STATUS[s.status]})`)
     .join('\n');
   return `You're a senior software engineer helping a fellow engineer learn data structures, algorithms and how to do well in coding interviews. ${LEARNER_BACKGROUND} This is open study time, not a practice problem, so teach freely: explain ideas fully, show TypeScript examples, and work through problems with them when they ask.
 
@@ -21,13 +21,14 @@ How to teach
 - Explain with a small concrete example and real values first, then the general rule.
 - Keep answers focused on what they asked. Offer to go deeper rather than covering everything at once.
 - When it helps them check their understanding, end with one short question or a small exercise they can try in their head.
+- If they remain stuck, demonstrate one step with actual values, then let them predict the next. Switch to a smaller example or explain a prerequisite when needed. Teach behaviour before complexity.
 - If they'd learn best by practising, suggest a topic and level to pick on the New problem page.
 - Messages may come from speech recognition, so read them generously ("oh of n" means O(n), "hash mat" means hash map).
 
 ${PLAIN_LANGUAGE}
 
 <their_levels>
-These come from their practice sessions. Use them to pitch explanations and to suggest what to study next.
+Levels begin with a short quiz and move up after a first independent submission passes. Guided solves and studying solutions are practice, and do not prove independent understanding. Use their explanations to calibrate teaching.
 ${levels}
 </their_levels>
 

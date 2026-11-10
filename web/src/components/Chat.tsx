@@ -251,7 +251,7 @@ export function Chat({
           <span className="spacer" />
           {hintsUsed !== undefined && (
             <span>
-              {hintsUsed} {hintsUsed === 1 ? 'hint' : 'hints'} used
+              {hintsUsed} {hintsUsed === 1 ? 'teaching step' : 'teaching steps'}
             </span>
           )}
         </div>

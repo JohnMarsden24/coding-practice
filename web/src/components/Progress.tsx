@@ -1,4 +1,4 @@
-import { topicName } from '../../../shared/curriculum';
+import { LEVEL_LABELS, topicName } from '../../../shared/curriculum';
 import type { AppState } from '../../../shared/types';
 import { navigate } from '../useRoute';
 
@@ -7,8 +7,8 @@ export function Progress({ state }: { state: AppState }) {
     <div className="page">
       <h1>Progress</h1>
       <p className="lead">
-        Solving a problem on your first submission with two hints or fewer moves a topic up a level. Failing your first
-        submission or giving up moves it down one.
+        Guided solves count as practice. A first independent submission that passes without hints moves the topic up.
+        Getting help, retrying or studying a solution keeps your level the same. Fresh reviews after a delay check what you remember.
       </p>
       <table className="progress-table">
         <thead>
@@ -17,6 +17,7 @@ export function Progress({ state }: { state: AppState }) {
             <th>Level</th>
             <th>Sessions</th>
             <th>Solved</th>
+            <th>Independent first tries</th>
           </tr>
         </thead>
         <tbody>
@@ -24,10 +25,11 @@ export function Progress({ state }: { state: AppState }) {
             <tr key={p.topic}>
               <td>{topicName(p.topic)}</td>
               <td>
-                <span className={`pill ${p.level}`}>{p.level}</span>
+                <span className={`pill ${p.level}`}>{LEVEL_LABELS[p.level]}</span>
               </td>
               <td>{p.sessions}</td>
               <td>{p.solved}</td>
+              <td>{p.independentSolved}</td>
             </tr>
           ))}
         </tbody>

@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { RunResult, SessionDetail, TestResult } from '../../../shared/types';
 import { CodeEditor } from './CodeEditor';
 import { Icon } from './Icons';
+import { TeachingTrace } from './TeachingTrace';
 
 const show = (v: unknown) => JSON.stringify(v);
 
@@ -11,6 +12,7 @@ function Problem({ session }: { session: SessionDetail }) {
   const p = session.problem;
   return (
     <div className="problem">
+      {p.learningGoal && <p className="learning-goal">{p.learningGoal}</p>}
       <div className="markdown">
         <Markdown remarkPlugins={[remarkGfm]}>{p.statement}</Markdown>
       </div>
@@ -24,7 +26,7 @@ function Problem({ session }: { session: SessionDetail }) {
         <div className="muted">{p.example.explanation}</div>
       </div>
       <div className="notes">
-        <div className="field-label">Notes from your questions</div>
+        <div className="field-label">{session.mode === 'guided' ? 'Requirements' : 'Notes from your questions'}</div>
         {p.revealedConstraints.length ? (
           <ul>
             {p.revealedConstraints.map((c) => (
@@ -128,6 +130,7 @@ export function Workspace({
   onRun,
   onSubmit,
   onGiveUp,
+  onHelp,
 }: {
   session: SessionDetail;
   code: string;
@@ -137,10 +140,14 @@ export function Workspace({
   onRun: () => void;
   onSubmit: () => void;
   onGiveUp: () => void;
+  onHelp: (workedExample: boolean) => void;
 }) {
   const [problemOpen, setProblemOpen] = useState(true);
   const [showSolution, setShowSolution] = useState(false);
   const finished = session.status !== 'in_progress';
+  useEffect(() => {
+    if (session.status === 'gave_up') setShowSolution(true);
+  }, [session.status]);
 
   return (
     <section className="workspace">
@@ -152,6 +159,17 @@ export function Workspace({
           Problem
         </button>
         {problemOpen && <Problem session={session} />}
+        {!finished && (
+          <div className="teaching-actions">
+            <button className="button small" disabled={busy || running} onClick={() => onHelp(false)}>
+              {session.mode === 'guided' ? 'Help me with one step' : 'Get teaching help'}
+            </button>
+            {session.mode === 'guided' && (
+              <button className="button small" disabled={busy || running} onClick={() => onHelp(true)}>Show a worked example</button>
+            )}
+          </div>
+        )}
+        {session.trace && session.mode === 'guided' && <TeachingTrace key={JSON.stringify(session.trace)} trace={session.trace} />}
       </div>
 
       <div className="editor-toolbar">
@@ -169,14 +187,14 @@ export function Workspace({
         <button className="button small" onClick={onRun} disabled={busy || running} title="Run visible tests (⌘ Enter)">
           <Icon name="play" size={14} /> Run
         </button>
-        {session.status !== 'gave_up' && (
+        {!finished && (
           <button className="button small primary" onClick={onSubmit} disabled={busy || running}>
             <Icon name="check" size={14} /> {session.submissions ? 'Resubmit' : 'Submit'}
           </button>
         )}
         {!finished && (
           <button className="button small ghost" onClick={onGiveUp} disabled={busy || running}>
-            <Icon name="flag" size={14} /> Give up
+            <Icon name="flag" size={14} /> Study solution
           </button>
         )}
       </div>

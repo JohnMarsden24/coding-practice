@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { LEVELS, TOPICS, type Level, type TopicId } from '../shared/curriculum';
-import type { ChatMessage, LearnChatDetail, LearnChatSummary, MessageKind, Problem, RunResult, SessionStatus, SessionSummary, TopicProgress } from '../shared/types';
+import type { ChatMessage, LearnChatDetail, LearnChatSummary, MessageKind, PracticeReview, Problem, RunResult, SessionMode, SessionStatus, SessionSummary, TeachingTrace, TopicProgress } from '../shared/types';
 
 export interface SessionRow extends SessionSummary {
   kind: 'coding';
@@ -13,6 +13,7 @@ export interface SessionRow extends SessionSummary {
   submissions: number;
   progressApplied: boolean;
   lastRun: RunResult | null;
+  trace: TeachingTrace | null;
 }
 
 export interface StoredMessage extends ChatMessage {
@@ -77,6 +78,17 @@ export function openStore(path: string) {
     CREATE INDEX IF NOT EXISTS learn_messages_chat ON learn_messages(chat_id, id);
   `);
 
+  const columns = new Set(db.prepare('PRAGMA table_info(sessions)').all().map((r) => r.name));
+  if (!columns.has('mode')) db.exec("ALTER TABLE sessions ADD COLUMN mode TEXT NOT NULL DEFAULT 'guided'");
+  if (!columns.has('review_of')) db.exec('ALTER TABLE sessions ADD COLUMN review_of TEXT');
+  if (!columns.has('trace')) db.exec('ALTER TABLE sessions ADD COLUMN trace TEXT');
+  db.exec(`CREATE TABLE IF NOT EXISTS practice_reviews (
+    topic TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    due_at INTEGER NOT NULL,
+    interval_days INTEGER NOT NULL
+  )`);
+
   const toSession = (r: Record<string, unknown>): SessionRow => ({
     id: r.id as string,
     kind: 'coding',
@@ -92,6 +104,9 @@ export function openStore(path: string) {
     progressApplied: Boolean(r.progress_applied),
     lastRun: r.last_run ? JSON.parse(r.last_run as string) : null,
     updatedAt: r.updated_at as number,
+    mode: r.mode as SessionMode,
+    reviewOf: (r.review_of as string | null) ?? null,
+    trace: r.trace ? JSON.parse(r.trace as string) : null,
   });
 
   const toMessage = (r: Record<string, unknown>): StoredMessage => ({
@@ -106,12 +121,13 @@ export function openStore(path: string) {
   return {
     close: () => db.close(),
 
-    createSession(id: string, problem: Problem): SessionRow {
+    createSession(id: string, problem: Problem, mode: SessionMode = 'guided', reviewOf: string | null = null): SessionRow {
       const now = Date.now();
       db.prepare(
-        `INSERT INTO sessions (id, title, topic, difficulty, status, problem, code, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'in_progress', ?, ?, ?, ?)`,
-      ).run(id, problem.title, problem.topic, problem.difficulty, JSON.stringify(problem), problem.starterCode, now, now);
+        `INSERT INTO sessions (id, title, topic, difficulty, status, problem, code, revealed, mode, review_of, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'in_progress', ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(id, problem.title, problem.topic, problem.difficulty, JSON.stringify(problem), problem.starterCode,
+        JSON.stringify(mode === 'guided' ? problem.constraints : []), mode, reviewOf, now, now);
       return this.getSession(id)!;
     },
 
@@ -122,7 +138,7 @@ export function openStore(path: string) {
 
     listSessions(): SessionSummary[] {
       return db
-        .prepare('SELECT id, title, topic, difficulty, status, updated_at FROM sessions ORDER BY updated_at DESC')
+        .prepare('SELECT id, title, topic, difficulty, status, updated_at, mode, review_of FROM sessions ORDER BY updated_at DESC')
         .all()
         .map((r) => ({
           id: r.id as string,
@@ -131,6 +147,8 @@ export function openStore(path: string) {
           difficulty: r.difficulty as Level,
           status: r.status as SessionStatus,
           updatedAt: r.updated_at as number,
+          mode: r.mode as SessionMode,
+          reviewOf: (r.review_of as string | null) ?? null,
         }));
     },
 
@@ -152,6 +170,8 @@ export function openStore(path: string) {
         submissions: number;
         progressApplied: boolean;
         lastRun: RunResult;
+        mode: SessionMode;
+        trace: TeachingTrace;
       }>,
       touch = true,
     ) {
@@ -164,6 +184,8 @@ export function openStore(path: string) {
         submissions: changes.submissions,
         progress_applied: changes.progressApplied === undefined ? undefined : Number(changes.progressApplied),
         last_run: changes.lastRun && JSON.stringify(changes.lastRun),
+        mode: changes.mode,
+        trace: changes.trace && JSON.stringify(changes.trace),
       };
       const set = Object.entries(columns).filter(([, v]) => v !== undefined);
       if (touch) set.push(['updated_at', Date.now()]);
@@ -222,7 +244,8 @@ export function openStore(path: string) {
       const counts = new Map(
         db
           .prepare(
-            `SELECT topic, COUNT(*) AS sessions, SUM(status = 'solved') AS solved, MAX(updated_at) AS last
+            `SELECT topic, COUNT(*) AS sessions, SUM(status = 'solved') AS solved,
+             SUM(status = 'solved' AND mode = 'independent' AND hints = '[]' AND submissions = 1) AS independent
              FROM sessions GROUP BY topic`,
           )
           .all()
@@ -233,6 +256,28 @@ export function openStore(path: string) {
         level: levels[t.id],
         sessions: Number(counts.get(t.id)?.sessions ?? 0),
         solved: Number(counts.get(t.id)?.solved ?? 0),
+        independentSolved: Number(counts.get(t.id)?.independent ?? 0),
+      }));
+    },
+
+    scheduleReview(session: SessionRow, independentPassed: boolean) {
+      const previous = db.prepare('SELECT source_id, interval_days FROM practice_reviews WHERE topic = ?').get(session.topic);
+      const interval = independentPassed && session.reviewOf === previous?.source_id
+        ? Math.min(30, Number(previous.interval_days) === 2 ? 7 : Number(previous.interval_days) * 3)
+        : 2;
+      db.prepare(`INSERT INTO practice_reviews (topic, source_id, due_at, interval_days) VALUES (?, ?, ?, ?)
+        ON CONFLICT(topic) DO UPDATE SET source_id = excluded.source_id, due_at = excluded.due_at, interval_days = excluded.interval_days`)
+        .run(session.topic, session.id, Date.now() + interval * 86400000, interval);
+    },
+
+    reviews(): PracticeReview[] {
+      return db.prepare(`SELECT r.topic, r.source_id, r.due_at, s.title, s.difficulty
+        FROM practice_reviews r JOIN sessions s ON s.id = r.source_id ORDER BY r.due_at`).all().map((r) => ({
+        topic: r.topic as TopicId,
+        difficulty: r.difficulty as Level,
+        sourceId: r.source_id as string,
+        sourceTitle: r.title as string,
+        dueAt: r.due_at as number,
       }));
     },
 

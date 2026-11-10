@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { topicName } from '../../../shared/curriculum';
+import { LEVEL_LABELS, topicName } from '../../../shared/curriculum';
 import type { QuizQuestion, QuizResult } from '../../../shared/types';
 import { api } from '../api';
 
@@ -38,15 +38,15 @@ export function Quiz({ firstTime, onFinish }: { firstTime: boolean; onFinish: ()
       <div className="page">
         <h1>Your starting levels</h1>
         <p className="lead">
-          Topics where you got both questions right start at medium. Everything else starts at easy, and levels move as you
-          solve problems.
+          Topics where you got both questions right start at "Build on it". Everything else starts at "Starting point".
+          Independent submissions can move your level up; getting help keeps it the same.
         </p>
         <ul className="level-grid">
           {result.perTopic.map((t) => (
             <li key={t.topic}>
               <span>{topicName(t.topic)}</span>
               <span className="muted">{t.correct}/2</span>
-              <span className={`pill ${t.level}`}>{t.level}</span>
+              <span className={`pill ${t.level}`}>{LEVEL_LABELS[t.level]}</span>
             </li>
           ))}
         </ul>
@@ -96,7 +96,7 @@ export function Quiz({ firstTime, onFinish }: { firstTime: boolean; onFinish: ()
                 await onFinish();
               }}
             >
-              Skip, and start everything at easy
+              Skip, and start with the basics
             </button>
           )}
         </div>
