@@ -151,7 +151,7 @@ export function SessionView({ id, onChange }: { id: string; onChange: () => Prom
       )}
       <div className={`session-body ${panelOpen ? '' : 'panel-closed'}`}>
         <Chat
-          sessionId={id}
+          transcribePath={`/sessions/${id}/transcribe`}
           messages={session.messages}
           pending={pending}
           streaming={streaming}

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChatMessage, MessageKind } from '../../../shared/types';
@@ -41,7 +41,7 @@ function tapSpace(el: Element | null, composer: HTMLTextAreaElement | null) {
 }
 
 export function Chat({
-  sessionId,
+  transcribePath,
   messages,
   pending,
   streaming,
@@ -50,8 +50,11 @@ export function Chat({
   busy,
   onSend,
   hintsUsed,
+  prompt = 'Talk it through…',
+  intro,
 }: {
-  sessionId: string;
+  /** Where Whisper recordings are sent, so they're transcribed with the right vocabulary. */
+  transcribePath: string;
   messages: ChatMessage[];
   pending: string | null;
   streaming: Streaming | null;
@@ -59,7 +62,10 @@ export function Chat({
   setDraft: (text: string) => void;
   busy: boolean;
   onSend: (text: string) => void;
-  hintsUsed: number;
+  hintsUsed?: number;
+  prompt?: string;
+  /** Shown in place of the conversation until the first message. */
+  intro?: ReactNode;
 }) {
   const list = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -73,7 +79,7 @@ export function Chat({
   const combine = (spoken: string) => [base.current, spoken].filter(Boolean).join(base.current.endsWith(' ') ? '' : ' ');
 
   const speech = useVoice({
-    sessionId,
+    transcribePath,
     onText: (spoken) => setDraft(combine(spoken)),
     onDone: (spoken) => {
       const text = combine(spoken).trim();
@@ -176,6 +182,7 @@ export function Chat({
         }}
       >
         <div className="message-column">
+          {!messages.length && !pending && intro}
           {messages.map((m) => (
             <Message key={m.id} role={m.role} kind={m.kind} content={m.content} />
           ))}
@@ -195,8 +202,8 @@ export function Chat({
                 : speech.state === 'transcribing'
                   ? 'Transcribing…'
                   : speech.supported
-                    ? 'Talk it through… (hold Space to speak)'
-                    : 'Talk it through…'
+                    ? `${prompt} (hold Space to speak)`
+                    : prompt
             }
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -242,9 +249,11 @@ export function Chat({
           )}
           {speech.error && <span className="error-text">{speech.error}</span>}
           <span className="spacer" />
-          <span>
-            {hintsUsed} {hintsUsed === 1 ? 'hint' : 'hints'} used
-          </span>
+          {hintsUsed !== undefined && (
+            <span>
+              {hintsUsed} {hintsUsed === 1 ? 'hint' : 'hints'} used
+            </span>
+          )}
         </div>
       </div>
     </section>

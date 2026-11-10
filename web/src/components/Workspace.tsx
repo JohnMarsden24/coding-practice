@@ -16,15 +16,15 @@ function Problem({ session }: { session: SessionDetail }) {
       </div>
       <div className="example">
         <div>
-          <span className="label">Input</span> <code>{p.example.input}</code>
+          <span className="field-label">Input</span> <code>{p.example.input}</code>
         </div>
         <div>
-          <span className="label">Output</span> <code>{p.example.output}</code>
+          <span className="field-label">Output</span> <code>{p.example.output}</code>
         </div>
         <div className="muted">{p.example.explanation}</div>
       </div>
       <div className="notes">
-        <div className="label">Notes from your questions</div>
+        <div className="field-label">Notes from your questions</div>
         {p.revealedConstraints.length ? (
           <ul>
             {p.revealedConstraints.map((c) => (
@@ -37,7 +37,7 @@ function Problem({ session }: { session: SessionDetail }) {
       </div>
       {p.prelude.trim() && (
         <div className="notes">
-          <div className="label">Provided code</div>
+          <div className="field-label">Provided code</div>
           <pre className="code-block">{p.prelude.trim()}</pre>
         </div>
       )}
@@ -64,19 +64,19 @@ function Result({ r }: { r: TestResult }) {
         <div className="test-detail">
           {r.input !== undefined && (
             <div>
-              <span className="label">Input</span> <code>{r.input.map(show).join(', ')}</code>
+              <span className="field-label">Input</span> <code>{r.input.map(show).join(', ')}</code>
             </div>
           )}
           {r.expected !== undefined && (
             <div>
-              <span className="label">Expected</span> <code>{show(r.expected)}</code>
+              <span className="field-label">Expected</span> <code>{show(r.expected)}</code>
             </div>
           )}
           {r.error ? (
             <div className="error-text">{r.error}</div>
           ) : (
             <div>
-              <span className="label">Got</span> <code>{show(r.actual)}</code>
+              <span className="field-label">Got</span> <code>{show(r.actual)}</code>
             </div>
           )}
           {r.logs && r.logs.length > 0 && <pre className="logs">{r.logs.join('\n')}</pre>}

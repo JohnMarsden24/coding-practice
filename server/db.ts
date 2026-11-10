@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { LEVELS, TOPICS, type Level, type TopicId } from '../shared/curriculum';
-import type { ChatMessage, MessageKind, Problem, RunResult, SessionStatus, SessionSummary, TopicProgress } from '../shared/types';
+import type { ChatMessage, LearnChatDetail, LearnChatSummary, MessageKind, Problem, RunResult, SessionStatus, SessionSummary, TopicProgress } from '../shared/types';
 
 export interface SessionRow extends SessionSummary {
   kind: 'coding';
@@ -61,6 +61,20 @@ export function openStore(path: string) {
       updated_at INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS learn_chats (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS learn_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id TEXT NOT NULL REFERENCES learn_chats(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS learn_messages_chat ON learn_messages(chat_id, id);
   `);
 
   const toSession = (r: Record<string, unknown>): SessionRow => ({
@@ -236,6 +250,49 @@ export function openStore(path: string) {
           LEVELS.indexOf(levels[a.id]) - LEVELS.indexOf(levels[b.id]) || (last.get(a.id) ?? 0) - (last.get(b.id) ?? 0),
       );
       return { topic: best.id, difficulty: levels[best.id] };
+    },
+
+    listLearnChats(): LearnChatSummary[] {
+      return db
+        .prepare('SELECT id, title, updated_at FROM learn_chats ORDER BY updated_at DESC')
+        .all()
+        .map((r) => ({ id: r.id as string, title: r.title as string, updatedAt: r.updated_at as number }));
+    },
+
+    getLearnChat(id: string): LearnChatDetail | undefined {
+      const row = db.prepare('SELECT id, title, updated_at FROM learn_chats WHERE id = ?').get(id);
+      if (!row) return undefined;
+      const messages = db
+        .prepare('SELECT id, role, content, created_at FROM learn_messages WHERE chat_id = ? ORDER BY id')
+        .all(id)
+        .map((r) => ({
+          id: r.id as number,
+          role: r.role as 'user' | 'assistant',
+          kind: 'chat' as const,
+          content: r.content as string,
+          createdAt: r.created_at as number,
+        }));
+      return { id: row.id as string, title: row.title as string, updatedAt: row.updated_at as number, messages };
+    },
+
+    /** Saves a question and its reply, creating the chat on its first exchange. */
+    addLearnExchange(id: string, title: string, question: string, reply: string) {
+      const now = Date.now();
+      db.prepare(
+        `INSERT INTO learn_chats (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at`,
+      ).run(id, title, now, now);
+      const insert = db.prepare('INSERT INTO learn_messages (chat_id, role, content, created_at) VALUES (?, ?, ?, ?)');
+      insert.run(id, 'user', question, now);
+      insert.run(id, 'assistant', reply, now);
+    },
+
+    renameLearnChat(id: string, title: string) {
+      db.prepare('UPDATE learn_chats SET title = ? WHERE id = ?').run(title, id);
+    },
+
+    deleteLearnChat(id: string) {
+      db.prepare('DELETE FROM learn_chats WHERE id = ?').run(id);
     },
 
     getSetting(key: string): string | undefined {

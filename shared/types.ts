@@ -104,6 +104,7 @@ export interface AppState {
   quizTaken: boolean;
   progress: TopicProgress[];
   sessions: SessionSummary[];
+  learnChats: LearnChatSummary[];
   suggestion: { topic: TopicId; difficulty: Level };
 }
 
@@ -117,4 +118,14 @@ export interface QuizQuestion {
 export interface QuizResult {
   perTopic: { topic: TopicId; correct: number; level: Level }[];
   answers: { id: string; correct: boolean; answer: string; explanation: string }[];
+}
+
+export interface LearnChatSummary {
+  id: string;
+  title: string;
+  updatedAt: number;
+}
+
+export interface LearnChatDetail extends LearnChatSummary {
+  messages: ChatMessage[];
 }

@@ -61,11 +61,11 @@ export type VoiceState = 'idle' | 'listening' | 'transcribing';
  * Without Whisper, the browser's transcript is the final text.
  */
 export function useVoice({
-  sessionId,
+  transcribePath,
   onText,
   onDone,
 }: {
-  sessionId: string;
+  transcribePath: string;
   onText: (text: string) => void;
   onDone: (text: string) => void;
 }) {
@@ -109,7 +109,7 @@ export function useVoice({
       }
       setPhase('transcribing');
       try {
-        const res = await fetch(`/api/sessions/${sessionId}/transcribe`, {
+        const res = await fetch(`/api${transcribePath}`, {
           method: 'POST',
           headers: { 'content-type': audio.type || 'application/octet-stream' },
           body: audio,
@@ -122,7 +122,7 @@ export function useVoice({
         finish(preview.current);
       }
     },
-    [finish, sessionId],
+    [finish, transcribePath],
   );
 
   const start = useCallback(async () => {

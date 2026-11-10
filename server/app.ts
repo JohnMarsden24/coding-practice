@@ -2,14 +2,15 @@ import { randomUUID } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { isLevel, isTopic, MAX_HINTS_FOR_LEVEL_UP } from '../shared/curriculum';
-import type { AppState, RunResult, SessionDetail } from '../shared/types';
+import type { AppState, LearnChatDetail, RunResult, SessionDetail } from '../shared/types';
 import { describeError, type Claude } from './claude';
 import { buildHistory, chatTurn, feedback, openingMessage, walkthrough, workspaceContext, type Emit } from './coach';
 import type { SessionRow, Store } from './db';
 import { generateProblem, publicProblem, runSettings, testsFor } from './problems';
+import { learnHistory, learnTitle, learnTurn } from './learn';
 import { quizQuestions, scoreQuiz } from './quiz';
 import { runTests } from './runner';
-import { transcribe, vocabulary, whisperAvailable } from './voice';
+import { studyVocabulary, transcribe, vocabulary, whisperAvailable } from './voice';
 
 function publicRun(run: RunResult): RunResult {
   return {
@@ -58,7 +59,7 @@ export function createApp({ store, claude }: { store: Store; claude: Claude }) {
   };
 
   app.onError((error, c) => {
-    if (error instanceof NotFound) return c.json({ error: 'Session not found' }, 404);
+    if (error instanceof NotFound) return c.json({ error: error.message || 'Session not found' }, 404);
     if (error instanceof BadRequest) return c.json({ error: error.message }, 400);
     console.error(error);
     return c.json({ error: describeError(error) }, 500);
@@ -69,6 +70,7 @@ export function createApp({ store, claude }: { store: Store; claude: Claude }) {
       quizTaken: store.getSetting('quizTaken') === 'true',
       progress: store.progress(),
       sessions: store.listSessions(),
+      learnChats: store.listLearnChats(),
       suggestion: store.suggestion(),
     }),
   );
@@ -141,14 +143,15 @@ export function createApp({ store, claude }: { store: Store; claude: Claude }) {
     });
   });
 
-  app.post('/sessions/:id/transcribe', async (c) => {
-    const session = load(c);
+  const transcribeRoute = async (c: Context, prompt: string) => {
     if (!(await whisperAvailable())) return c.json({ error: 'Whisper is not installed on this machine.' }, 503);
     const audio = new Uint8Array(await c.req.arrayBuffer());
     if (!audio.length) throw new BadRequest('No audio was sent.');
     if (audio.length > 20 * 1024 * 1024) throw new BadRequest('That recording is too long.');
-    return c.json({ text: await transcribe(audio, vocabulary(session.problem)) });
-  });
+    return c.json({ text: await transcribe(audio, prompt) });
+  };
+
+  app.post('/sessions/:id/transcribe', (c) => transcribeRoute(c, vocabulary(load(c).problem)));
 
   app.post('/sessions/:id/run', async (c) => {
     const session = load(c);
@@ -219,6 +222,49 @@ export function createApp({ store, claude }: { store: Store; claude: Claude }) {
       store.addMessage(session.id, { role: 'assistant', kind: 'walkthrough', content: text });
       await emit('done', { session: detail(store.getSession(session.id)!) });
     });
+  });
+
+  const learnReply = async (c: Context, existing?: LearnChatDetail) => {
+    const { content } = await c.req.json<{ content?: string }>().catch(() => ({ content: undefined }));
+    const question = typeof content === 'string' ? content.trim() : '';
+    if (!question) throw new BadRequest('Write a message first.');
+    const id = existing?.id ?? randomUUID();
+    return sse(c, async (emit) => {
+      const reply = await learnTurn(
+        claude,
+        { progress: store.progress(), sessions: store.listSessions() },
+        learnHistory(existing?.messages ?? [], question),
+        emit,
+      );
+      store.addLearnExchange(id, learnTitle(question), question, reply);
+      await emit('done', { chat: store.getLearnChat(id) });
+    });
+  };
+
+  const loadLearnChat = (c: Context) => {
+    const chat = store.getLearnChat(c.req.param('id') ?? '');
+    if (!chat) throw new NotFound('Chat not found');
+    return chat;
+  };
+
+  app.post('/learn', (c) => learnReply(c));
+
+  app.post('/learn/transcribe', (c) => transcribeRoute(c, studyVocabulary()));
+
+  app.get('/learn/:id', (c) => c.json<LearnChatDetail>(loadLearnChat(c)));
+
+  app.post('/learn/:id', (c) => learnReply(c, loadLearnChat(c)));
+
+  app.patch('/learn/:id', async (c) => {
+    const chat = loadLearnChat(c);
+    const { title } = await c.req.json<{ title?: string }>();
+    if (typeof title === 'string' && title.trim()) store.renameLearnChat(chat.id, title.trim());
+    return c.json({ ok: true });
+  });
+
+  app.delete('/learn/:id', (c) => {
+    store.deleteLearnChat(loadLearnChat(c).id);
+    return c.json({ ok: true });
   });
 
   return app;

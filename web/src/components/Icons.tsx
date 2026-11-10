@@ -11,6 +11,7 @@ const paths = {
   flag: 'M6 20V4M6 4h11l-2 4 2 4H6',
   panel: 'M4 5h16v14H4zM14 5v14',
   chevron: 'M9 6l6 6-6 6',
+  book: 'M3 5h6a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H3zM21 5h-6a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h7z',
 };
 
 export function Icon({ name, size = 16 }: { name: keyof typeof paths; size?: number }) {

@@ -26,6 +26,10 @@ Sessions live in `data/coding-practice.db` (SQLite). Delete it to start over.
 
 Your level for a topic goes up when you solve it on the first submission with two hints or fewer, and down when your first submission fails or you give up.
 
+## Learn
+
+**Learn** in the sidebar is an open chat for studying, with no problem attached. Ask Claude (Sonnet) anything about data structures, algorithms or interviews and it teaches from the ground up, with TypeScript examples. It knows your level for each topic and your recent problems, so it can pitch explanations and suggest what to practise next. Each chat is saved and listed in the sidebar, where you can rename or delete it. Learn chats don't change your topic levels.
+
 ## Voice
 
 Hold the mic button, or hold Space, and speak. A quick tap of Space still types a space, and in the code editor Space always types. Rough words appear as you talk, and when you let go the message sends. Tick "Review voice messages before sending" to check it first.

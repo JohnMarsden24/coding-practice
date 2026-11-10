@@ -5,11 +5,13 @@ export type Route =
   | { name: 'new' }
   | { name: 'quiz' }
   | { name: 'progress' }
+  | { name: 'learn'; id?: string }
   | { name: 'session'; id: string };
 
 function parse(hash: string): Route {
   const [, first, second] = hash.replace(/^#/, '').split('/');
   if (first === 'session' && second) return { name: 'session', id: second };
+  if (first === 'learn') return { name: 'learn', id: second || undefined };
   if (first === 'new' || first === 'quiz' || first === 'progress') return { name: first };
   return { name: 'home' };
 }

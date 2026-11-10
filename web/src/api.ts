@@ -1,4 +1,4 @@
-import type { AppState, QuizQuestion, QuizResult, RunResult, SessionDetail } from '../../shared/types';
+import type { AppState, LearnChatDetail, QuizQuestion, QuizResult, RunResult, SessionDetail } from '../../shared/types';
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -64,4 +64,9 @@ export const api = {
   chat: (id: string, content: string, code: string, handlers: Handlers) => stream(`/sessions/${id}/chat`, { content, code }, handlers),
   feedback: (id: string, handlers: Handlers) => stream(`/sessions/${id}/feedback`, {}, handlers),
   walkthrough: (id: string, handlers: Handlers) => stream(`/sessions/${id}/walkthrough`, {}, handlers),
+  learnChat: (id: string) => request<LearnChatDetail>('GET', `/learn/${id}`),
+  renameLearnChat: (id: string, title: string) => request('PATCH', `/learn/${id}`, { title }),
+  removeLearnChat: (id: string) => request('DELETE', `/learn/${id}`),
+  /** Asks a question, starting a new chat when there's no id. */
+  learn: (id: string | undefined, content: string, handlers: Handlers) => stream(id ? `/learn/${id}` : '/learn', { content }, handlers),
 };

@@ -5,7 +5,7 @@ import { rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { topicName, type TopicId } from '../shared/curriculum';
+import { TOPICS, topicName, type TopicId } from '../shared/curriculum';
 import type { Problem } from '../shared/types';
 
 const run = promisify(execFile);
@@ -61,6 +61,11 @@ export function vocabulary(problem: Problem): string {
     .join(', ');
   const statement = problem.statement.replace(/[*_`#]/g, '').slice(0, 400);
   return `${topicName(problem.topic)} interview problem: ${problem.title}. ${statement} Terms: ${COMMON_TERMS}, ${TOPIC_TERMS[problem.topic]}. In the code, I call ${problem.functionName}(${paramNames}), so ${problem.functionName} takes ${paramNames}.`;
+}
+
+/** Vocabulary for open questions about any topic, when there's no problem to draw names from. */
+export function studyVocabulary(): string {
+  return `Questions about data structures, algorithms and coding interviews. Topics: ${TOPICS.map((t) => t.name).join(', ')}. Terms: monotonic stack, trie, heap, BFS, DFS, memoisation, ${COMMON_TERMS}.`;
 }
 
 const BIG_O: [RegExp, string][] = [

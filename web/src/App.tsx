@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AppState } from '../../shared/types';
 import { api } from './api';
+import { LearnView } from './components/LearnView';
 import { NewProblem } from './components/NewProblem';
 import { Progress } from './components/Progress';
 import { Quiz } from './components/Quiz';
@@ -36,6 +37,8 @@ export function App() {
   let main;
   if (route.name === 'session') {
     main = <SessionView key={route.id} id={route.id} onChange={refresh} />;
+  } else if (route.name === 'learn') {
+    main = <LearnView id={route.id} state={state} onChange={refresh} />;
   } else if (route.name === 'progress') {
     main = <Progress state={state} />;
   } else if (route.name === 'quiz' || !state.quizTaken) {
@@ -69,7 +72,7 @@ export function App() {
         onToggle={() => setSidebarOpen((o) => !o)}
         onChange={refresh}
       />
-      <main className="main">{main}</main>
+      <main className="app-main">{main}</main>
     </div>
   );
 }
