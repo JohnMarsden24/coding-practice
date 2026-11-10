@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import { isLevel, isTopic, MAX_HINTS_FOR_LEVEL_UP } from '../shared/curriculum';
-import type { AppState, LearnChatDetail, RunResult, SessionDetail } from '../shared/types';
+import { isLevel, isTopic } from '../shared/curriculum';
+import type { AppState, LearnChatDetail, RunResult, SessionDetail, SessionMode } from '../shared/types';
 import { describeError, type Claude } from './claude';
 import { buildHistory, chatTurn, feedback, openingMessage, walkthrough, workspaceContext, type Emit } from './coach';
 import type { SessionRow, Store } from './db';
@@ -43,7 +43,10 @@ export function createApp({ store, claude }: { store: Store; claude: Claude }) {
     difficulty: s.difficulty,
     status: s.status,
     updatedAt: s.updatedAt,
-    problem: publicProblem(s.problem, s.revealed),
+    mode: s.mode,
+    reviewOf: s.reviewOf,
+    trace: s.trace,
+    problem: publicProblem(s.problem, s.revealed, s.mode),
     code: s.code,
     messages: store.messages(s.id).map(({ context: _context, ...m }) => m),
     hintsUsed: s.hints.length,
@@ -72,6 +75,7 @@ export function createApp({ store, claude }: { store: Store; claude: Claude }) {
       sessions: store.listSessions(),
       learnChats: store.listLearnChats(),
       suggestion: store.suggestion(),
+      reviews: store.reviews(),
     }),
   );
 
@@ -93,22 +97,45 @@ export function createApp({ store, claude }: { store: Store; claude: Claude }) {
   });
 
   app.post('/sessions', async (c) => {
-    const { topic, difficulty } = await c.req.json<{ topic: unknown; difficulty: unknown }>();
+    const { topic, difficulty, mode = 'guided', reviewOf } = await c.req.json<{
+      topic: unknown; difficulty: unknown; mode?: SessionMode; reviewOf?: string;
+    }>();
     if (!isTopic(topic) || !isLevel(difficulty)) throw new BadRequest('Pick a topic and difficulty.');
+    if (mode !== 'guided' && mode !== 'independent') throw new BadRequest('Pick guided learning or independent practice.');
+    const review = reviewOf === undefined ? undefined : store.reviews().find((r) => r.sourceId === reviewOf);
+    if (reviewOf !== undefined && (!review || review.topic !== topic || review.difficulty !== difficulty || mode !== 'independent')) {
+      throw new BadRequest('Choose an independent review from the review list.');
+    }
+    if (review && review.dueAt > Date.now()) throw new BadRequest('This review is scheduled for later. You can start a new problem now.');
+    const previous = review ? store.getSession(review.sourceId) : undefined;
     return sse(c, async (emit) => {
+      const existing = review && store.listSessions().find((s) => s.reviewOf === review.sourceId && s.status === 'in_progress');
+      if (existing) {
+        await emit('done', { session: detail(store.getSession(existing.id)!) });
+        return;
+      }
       const problem = await generateProblem(claude, {
         topic,
         difficulty,
         avoidTitles: store.recentTitles(topic),
+        mode,
+        transferFrom: previous?.problem,
         onStatus: (text) => void emit('status', { text }),
       });
-      const session = store.createSession(randomUUID(), problem);
-      store.addMessage(session.id, { role: 'assistant', kind: 'chat', content: openingMessage(problem.title) });
+      const session = store.createSession(randomUUID(), problem, mode, review?.sourceId);
+      store.addMessage(session.id, { role: 'assistant', kind: 'chat', content: openingMessage(problem.title, mode) });
       await emit('done', { session: detail(session) });
     });
   });
 
   app.get('/sessions/:id', (c) => c.json(detail(load(c))));
+
+  app.post('/sessions/:id/guided', (c) => {
+    const session = load(c);
+    if (session.status !== 'in_progress') throw new BadRequest('This session is already finished.');
+    store.updateSession(session.id, { mode: 'guided', revealed: session.problem.constraints });
+    return c.json(detail(store.getSession(session.id)!));
+  });
 
   app.patch('/sessions/:id', async (c) => {
     const session = load(c);
@@ -138,7 +165,7 @@ export function createApp({ store, claude }: { store: Store; claude: Claude }) {
       const outcome = await chatTurn(claude, current, mergeTail(history), emit);
       store.addMessage(session.id, { role: 'user', kind: 'chat', content: content.trim(), context });
       store.addMessage(session.id, { role: 'assistant', kind: 'chat', content: outcome.reply });
-      store.updateSession(session.id, { revealed: outcome.revealed, hints: outcome.hints });
+      store.updateSession(session.id, { revealed: outcome.revealed, hints: outcome.hints, trace: outcome.trace ?? undefined });
       await emit('done', { session: detail(store.getSession(session.id)!) });
     });
   });
@@ -163,16 +190,14 @@ export function createApp({ store, claude }: { store: Store; claude: Claude }) {
 
   app.post('/sessions/:id/submit', async (c) => {
     const session = load(c);
-    if (session.status === 'gave_up') throw new BadRequest('This session was given up, so it can no longer be submitted.');
+    if (session.status !== 'in_progress') throw new BadRequest('This session is already finished. Start a fresh problem to practise again.');
     const { code } = await c.req.json<{ code: string }>();
     const run = await runTests({ ...runSettings(session.problem, code), tests: testsFor(session.problem, 'all') });
     const allPassed = !run.compileError && run.passed === run.total;
     const submissions = session.submissions + 1;
 
-    if (!session.progressApplied) {
-      if (!allPassed) store.shiftLevel(session.topic, -1);
-      else if (session.hints.length <= MAX_HINTS_FOR_LEVEL_UP) store.shiftLevel(session.topic, 1);
-    }
+    const independentPassed = session.mode === 'independent' && submissions === 1 && session.hints.length === 0 && allPassed;
+    if (!session.progressApplied && independentPassed) store.shiftLevel(session.topic, 1);
     store.updateSession(session.id, {
       code,
       lastRun: run,
@@ -187,6 +212,7 @@ export function createApp({ store, claude }: { store: Store; claude: Claude }) {
         ? `Submission ${submissions}: the code didn't compile`
         : `Submission ${submissions}: ${run.passed} of ${run.total} tests passed, including hidden tests`,
     });
+    if (allPassed) store.scheduleReview(store.getSession(session.id)!, independentPassed);
     return c.json(detail(store.getSession(session.id)!));
   });
 
@@ -204,13 +230,15 @@ export function createApp({ store, claude }: { store: Store; claude: Claude }) {
     const session = load(c);
     if (session.status !== 'in_progress') throw new BadRequest('This session is already finished.');
     const { code } = await c.req.json<{ code?: string }>().catch(() => ({ code: undefined }));
-    if (!session.progressApplied) store.shiftLevel(session.topic, -1);
     store.updateSession(session.id, {
       code: typeof code === 'string' ? code : session.code,
       status: 'gave_up',
       progressApplied: true,
+      mode: 'guided',
+      revealed: session.problem.constraints,
     });
-    store.addMessage(session.id, { role: 'user', kind: 'event', content: 'Gave up and revealed the solution' });
+    store.addMessage(session.id, { role: 'user', kind: 'event', content: 'Studied the model solution' });
+    store.scheduleReview(store.getSession(session.id)!, false);
     return c.json(detail(store.getSession(session.id)!));
   });
 

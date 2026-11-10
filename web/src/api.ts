@@ -1,4 +1,4 @@
-import type { AppState, LearnChatDetail, QuizQuestion, QuizResult, RunResult, SessionDetail } from '../../shared/types';
+import type { AppState, LearnChatDetail, QuizQuestion, QuizResult, RunResult, SessionDetail, SessionMode } from '../../shared/types';
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -60,7 +60,9 @@ export const api = {
   run: (id: string, code: string) => request<RunResult>('POST', `/sessions/${id}/run`, { code }),
   submit: (id: string, code: string) => request<SessionDetail>('POST', `/sessions/${id}/submit`, { code }),
   giveUp: (id: string, code: string) => request<SessionDetail>('POST', `/sessions/${id}/give-up`, { code }),
-  newSession: (topic: string, difficulty: string, handlers: Handlers) => stream('/sessions', { topic, difficulty }, handlers),
+  newSession: (topic: string, difficulty: string, handlers: Handlers, mode: SessionMode = 'guided', reviewOf?: string) =>
+    stream('/sessions', { topic, difficulty, mode, reviewOf }, handlers),
+  guided: (id: string) => request<SessionDetail>('POST', `/sessions/${id}/guided`),
   chat: (id: string, content: string, code: string, handlers: Handlers) => stream(`/sessions/${id}/chat`, { content, code }, handlers),
   feedback: (id: string, handlers: Handlers) => stream(`/sessions/${id}/feedback`, {}, handlers),
   walkthrough: (id: string, handlers: Handlers) => stream(`/sessions/${id}/walkthrough`, {}, handlers),

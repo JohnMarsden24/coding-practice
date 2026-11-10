@@ -1,6 +1,6 @@
 # Coding practice
 
-A local app for practising coding interview problems with Claude as a fellow engineer. Claude talks through your reasoning with you, gives hints one step at a time instead of answers, runs your TypeScript against real tests, and gives feedback when you submit.
+A local app for learning coding interview problems with Claude as a fellow engineer. Work through one idea at a time with concrete examples, then try a fresh problem independently. Your TypeScript runs against real tests, and your practice is saved locally.
 
 ## Run it
 
@@ -17,14 +17,16 @@ Sessions live in `data/coding-practice.db` (SQLite). Delete it to start over.
 
 ## How a session works
 
-1. The first time, a 28 question quiz sets your starting level per topic. You can skip it, and every topic starts at easy.
+1. The first time, a 28 question quiz sets your starting level per topic. You can skip it and start with the basics.
 2. "New problem" suggests your weakest topic. Opus writes a fresh problem with visible tests, hidden edge case tests and large inputs, then checks them all against its own reference solution before you see the problem.
-3. Claude (Sonnet) opens by asking you to restate the problem. It holds back details like input sizes until you ask, and adds each one to the notes on the problem panel.
-4. Talk through your approach. When you're stuck, Claude climbs a hint ladder: a question, a pointer, the pattern by name, then pseudocode. It won't write the solution.
-5. **Run** (⌘ Enter) runs the visible tests. **Submit** runs everything, including hidden and large inputs, and Opus gives feedback on what worked well and what to work on. You can fix your code and resubmit.
-6. **Give up** shows the model solution with a walkthrough.
+3. Guided learning is the default. The requirements are visible from the start. Begin with a small example, predict one decision, turn it into code, then check boundary cases. Discuss complexity once the behaviour makes sense.
+4. When you're stuck, Claude increases support from a question to a concrete pointer, an explanation, then a worked example or partial code. **Show a worked example** asks for a demonstration straight away. Claude can show a visual trace with the inspected value, remaining possibilities and saved answer. Predict the next step before revealing it. These are teaching illustrations, not execution traces of your code.
+5. **Run** (⌘ Enter) runs the visible tests. **Submit** runs everything, including hidden and large inputs. Feedback focuses on what your reasoning and tests show, with one next step to learn. You can fix your code and resubmit until you solve it.
+6. **Study solution** finishes the attempt and shows the model solution with a walkthrough. Your level stays the same.
 
-Your level for a topic goes up when you solve it on the first submission with two hints or fewer, and down when your first submission fails or you give up.
+Choose **Independent practice** to work without algorithm reminders or coaching. You can clarify requirements and syntax, or use **Get teaching help** to switch the attempt to guided learning. A first independent submission that passes without hints moves your topic up one level. Guided solves, retries and studying solutions keep it unchanged. This is a practice signal, not proof of mastery.
+
+After finishing an attempt, an independent review appears on New problem, scheduled two days later. It uses a different scenario and asks you to choose the approach yourself. Successful independent reviews extend the next gap to seven days, then 21, up to 30. Finishing a guided attempt or a retry resets it to two days. Reviews are offered in the app; they do not send notifications. Existing sessions open in guided mode, preserving code, messages and current topic levels.
 
 ## Learn
 

@@ -571,6 +571,131 @@ h2 {
   margin-top: 18px;
 }
 
+.practice-modes {
+  border: 0;
+  padding: 0;
+  margin: 0 0 24px;
+}
+
+.practice-modes legend {
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.practice-modes label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.practice-modes small {
+  display: block;
+  color: var(--muted);
+}
+
+.practice-reviews {
+  margin-top: 32px;
+}
+
+.learning-strip {
+  padding: 9px 24px;
+  background: var(--sidebar);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.learning-goal {
+  font-weight: 600;
+}
+
+.teaching-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.teaching-trace {
+  margin: 18px 0 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.teaching-trace figcaption {
+  font-weight: 600;
+}
+
+.trace-cells {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 4px;
+}
+
+.trace-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  min-width: 60px;
+  max-width: 160px;
+  padding: 6px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: var(--hover);
+  overflow-wrap: anywhere;
+}
+
+.trace-cell.discarded {
+  background: none;
+  color: var(--muted);
+}
+
+.trace-cell.discarded code {
+  opacity: 0.55;
+}
+
+.trace-cell.focus {
+  border-color: var(--accent);
+}
+
+.trace-cell.candidate {
+  background: var(--easy);
+}
+
+.trace-cell.candidate code {
+  opacity: 1;
+}
+
+.trace-index,
+.trace-marker {
+  font-size: 10px;
+  min-height: 15px;
+}
+
+.trace-cell code {
+  font-size: 16px;
+}
+
+.trace-prediction {
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+}
+
+.trace-controls {
+  align-items: center;
+  justify-content: space-between;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
 /* Session */
 
 .session {
@@ -1069,4 +1194,58 @@ h2 {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 10px;
+}
+
+@media (max-width: 1000px) {
+  .session-body {
+    grid-template-columns: minmax(280px, 1fr) minmax(320px, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .app {
+    grid-template-columns: 52px 1fr;
+  }
+  .sidebar:not(.collapsed) {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 264px;
+    z-index: 5;
+    box-shadow: 8px 0 24px rgb(0 0 0 / 0.12);
+  }
+  .app-main {
+    grid-column: 2;
+  }
+  .session-body {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .session-body .chat {
+    flex: none;
+    min-height: 380px;
+    height: 60vh;
+  }
+  .workspace-wrap {
+    flex: none;
+    height: 80vh;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .page {
+    padding: 32px 20px;
+  }
+  .editor-toolbar {
+    flex-wrap: wrap;
+  }
+  .progress-table {
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
